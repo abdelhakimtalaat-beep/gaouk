@@ -1,6 +1,1 @@
-// إعدادات الاتصال بـ Supabase — عدّلها مرة واحدة بعد إنشاء مشروعك (Project Settings → API)
-// المفتاح هنا هو anon (عام بطبيعته). لا تضع هنا أبداً مفتاح service_role.
-window.GAOUK_CONFIG = {
-  SUPABASE_URL: 'https://YOUR-PROJECT-REF.supabase.co',
-  SUPABASE_ANON_KEY: 'YOUR-ANON-PUBLIC-KEY',
-};
+window.GAOUK_CONFIG = { SUPABASE_URL: 'https://qvhpcjljgstwqgnbpqul.supabase.co', SUPABASE_ANON_KEY: 'sb_publishable_2SA_Y9uYHEfYRs00OyfM6Q_IdwQkX43' };
