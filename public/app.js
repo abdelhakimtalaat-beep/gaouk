@@ -115,8 +115,7 @@ App.view = (id, fn) => { App.views[id] = fn; };
 App.showLogin = function (msg) {
   document.body.classList.remove('printing-modal');
   $('#root').innerHTML = `<div class="login-wrap"><form class="login-card" id="lf" autocomplete="on">
-    <div class="brand"><div class="logo"><svg viewBox="0 0 64 64" width="38" height="38"><path d="M14 35 32 17l18 18v15H14z" fill="none" stroke="#e9dfc4" stroke-width="4" stroke-linejoin="round"/><path d="M27 50V38h10v12" fill="none" stroke="#e9dfc4" stroke-width="4"/></svg></div>
-    <h1>جاؤوك</h1><p>جاؤوك.. فأحسنّا استقبالهم</p></div>
+    <div class="brand"><img class="logo-img" src="logo.png" alt="شعار جاؤوك"><h1>جاؤوك</h1></div>
     ${msg ? `<div class="alert warn">${esc(msg)}</div>` : ''}
     <div class="field"><label for="u">اسم المستخدم</label><input id="u" name="username" type="text" autocomplete="username" required autofocus dir="ltr" style="text-align:right"></div>
     <div class="field"><label for="p">كلمة المرور</label><input id="p" name="password" type="password" autocomplete="current-password" required dir="ltr" style="text-align:right"></div>
@@ -148,7 +147,7 @@ App.visibleNav = () => App.nav.filter(n => !n[3] || n[3].includes(App.user.role)
 App.buildShell = function () {
   const u = App.user;
   $('#root').innerHTML = `<div class="app"><aside class="side" id="side">
-    <div class="brand"><h1>جاؤوك</h1><p>جاؤوك.. فأحسنّا استقبالهم</p></div>
+    <div class="brand"><img class="logo-img" src="logo-light.png" alt="شعار جاؤوك"><h1>جاؤوك</h1></div>
     <nav id="nav">${App.visibleNav().map(n => `<a data-id="${n[0]}" href="#/${n[0]}">${icon(n[2])}<span>${n[1]}</span></a>`).join('')}</nav>
     <div class="foot">${esc(App.roleLabels[u.role])}</div></aside>
     <div class="main"><header class="top"><button class="btn sec menu-btn" id="mb" aria-label="القائمة">☰</button>
@@ -220,7 +219,7 @@ App.startPulse = function () {
 };
 App.showUpdateBar = function () {
   if (document.getElementById('upbar')) return;
-  const d = document.createElement('div'); d.id = 'upbar'; d.className = 'toast'; d.style.cssText = 'cursor:pointer;background:#2b4630;color:#fff';
+  const d = document.createElement('div'); d.id = 'upbar'; d.className = 'toast'; d.style.cssText = 'cursor:pointer;background:#14532d;color:#fff';
   d.innerHTML = 'تم تحديث البيانات من مستخدم آخر — <b>اضغط للتحديث</b>';
   d.onclick = () => { d.remove(); App.refresh(); }; document.getElementById('toasts').append(d); setTimeout(() => d.remove(), 60000);
 };
