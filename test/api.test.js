@@ -265,6 +265,60 @@ function client() {
   });
   await t('حذف مناسبة يتطلب كتابة اسمها', async () => { assert.equal((await admin('DELETE', `/events/${ev}`, {})).status, 400); });
 
+  console.log('\nطلبات الانضمام');
+  const jr = (o = {}) => anon('POST', '/join-request', { name: 'عبدالله الجديد', phone: '+966500000001', username: 'newguy', password: 'password1', ...o });
+  await t('طلب انضمام بلا دخول ينجح', async () => assert.equal((await jr()).status, 200));
+  await t('الدخول قبل الموافقة مرفوض برسالة «قيد المراجعة»', async () => { const r = await client().login('newguy', 'password1'); assert.equal(r.status, 401); assert.match(r.data.error, /قيد المراجعة/); });
+  await t('طلب بنفس اسم المستخدم مرفوض', async () => assert.equal((await jr({ phone: '+966500000002' })).status, 400));
+  await t('طلب بنفس الهاتف المعلق مرفوض', async () => assert.equal((await jr({ username: 'other1' })).status, 400));
+  await t('هاتف غير صحيح / كلمة مرور ضعيفة / اسم قصير مرفوضة', async () => {
+    assert.equal((await jr({ username: 'u2', phone: 'abc' })).status, 400); assert.equal((await jr({ username: 'u3', phone: '+966500000003', password: '1234' })).status, 400); assert.equal((await jr({ username: 'u4', phone: '+966500000004', name: 'ع' })).status, 400);
+  });
+  let pend;
+  await t('المدير يرى الطلب بحالة pending', async () => { pend = (await admin('GET', '/users')).data.users.find(u => u.username === 'newguy'); assert.equal(pend.status, 'pending'); });
+  await t('القبول كمشرف على دولتين', async () => {
+    assert.equal((await admin('PUT', '/users/' + pend.id, { name: pend.name, phone: pend.phone, role: 'country_supervisor', status: 'active', country_id: MY, extra_country_ids: [IN] })).status, 200);
+    const c = client(); assert.equal((await c.login('newguy', 'password1')).status, 200);
+    assert.deepEqual((await c('GET', '/countries')).data.countries.map(x => x.id).sort(), [MY, IN].sort());
+  });
+  await t('مشرف المباني: قبول بمبنيين', async () => {
+    await jr({ name: 'مشرف مبنى جديد', username: 'bnew', phone: '+966500000010' });
+    const p = (await admin('GET', '/users')).data.users.find(u => u.username === 'bnew'); const fl = st.flatMap(b => b.floors.map(f => f.id));
+    assert.equal((await admin('PUT', '/users/' + p.id, { name: p.name, phone: p.phone, role: 'building_supervisor', status: 'active', floor_ids: fl })).status, 200);
+    const u = (await admin('GET', '/users')).data.users.find(x => x.username === 'bnew'); assert.equal(u.floors.length, fl.length);
+  });
+  await t('مشرف عام: قبول بصلاحية كاملة', async () => {
+    await jr({ name: 'مشرف عام جديد', username: 'gnew', phone: '+966500000011' });
+    const p = (await admin('GET', '/users')).data.users.find(u => u.username === 'gnew');
+    await admin('PUT', '/users/' + p.id, { name: p.name, phone: p.phone, role: 'admin', status: 'active' });
+    const c = client(); await c.login('gnew', 'password1'); assert.equal((await c('GET', '/users')).status, 200);
+  });
+  await t('الرفض يحذف الطلب ويمنع الدخول', async () => {
+    await jr({ name: 'مرفوض جداً', username: 'rej1', phone: '+966500000012' });
+    const p = (await admin('GET', '/users')).data.users.find(u => u.username === 'rej1'); assert.equal((await admin('DELETE', '/users/' + p.id)).status, 200);
+    assert.equal((await client().login('rej1', 'password1')).status, 401);
+  });
+  await t('مشرف دولة لا يقبل الطلبات', async () => assert.equal((await my('PUT', '/users/' + pend.id, { role: 'admin', status: 'active', name: 'x' })).status, 403));
+
+  console.log('\nتصنيف «تابع لأسرة»');
+  let fh, fm;
+  await t('تسجيل رب أسرة ثم تابع مستقل برب الأسرة', async () => {
+    fh = (await admin('POST', '/visitors', { event_id: ev, full_name: 'رب أسرة اختبار', country_id: MY, category: 'family_head', arrival_date: '2026-12-21', flight_no: 'MH9' })).data.id; assert.ok(fh);
+    const r = await admin('POST', '/visitors', { event_id: ev, full_name: 'تابع مستقل', category: 'family_member', head_id: fh, relation: 'ابن' }); assert.equal(r.status, 200); fm = r.data.id;
+    const v = (await admin('GET', '/visitors/' + fm)).data.visitor; assert.equal(v.category, 'family_member'); assert.equal(v.head_id, fh); assert.equal(v.country_id, MY); assert.equal(v.arrival_date, '2026-12-21'); assert.equal(v.flight_no, 'MH9');
+  });
+  await t('تابع بلا رب أسرة أو برب غير صالح مرفوض', async () => {
+    assert.equal((await admin('POST', '/visitors', { event_id: ev, full_name: 'بلا رب', category: 'family_member' })).status, 400);
+    assert.equal((await admin('POST', '/visitors', { event_id: ev, full_name: 'رب خاطئ', category: 'family_member', head_id: fm })).status, 400);
+  });
+  await t('مشرف دولة أخرى لا يسجل تابعاً لأسرة دولة غيره', async () => { await admin('POST', '/users', { name: 'مشرف هند ٢', username: 'in_sup2', password: 'password1', role: 'country_supervisor', country_id: IN }); const ind2 = client(); await ind2.login('in_sup2', 'password1'); const r = await ind2('POST', '/visitors', { event_id: ev, full_name: 'متسلل', category: 'family_member', head_id: fh }); assert.equal(r.status, 403, JSON.stringify(r.data)); });
+  await t('تحويل فرد إلى تابع لأسرة بالتعديل', async () => {
+    const s = (await admin('POST', '/visitors', { event_id: ev, full_name: 'فرد سيتحول', country_id: MY, category: 'individual' })).data.id;
+    assert.equal((await admin('PUT', '/visitors/' + s, { category: 'family_member', head_id: fh })).status, 200);
+    const v = (await admin('GET', '/visitors/' + s)).data.visitor; assert.equal(v.category, 'family_member'); assert.equal(v.head_id, fh);
+  });
+  await t('رب أسرة له تابعون لا يتحول إلى تابع', async () => { const o = (await admin('POST', '/visitors', { event_id: ev, full_name: 'رب آخر', country_id: MY, category: 'family_head' })).data.id; assert.equal((await admin('PUT', '/visitors/' + fh, { category: 'family_member', head_id: o })).status, 400); });
+
   console.log(`\n${passed} نجح، ${failed} فشل`);
   server.close();
   process.exit(failed ? 1 : 0);

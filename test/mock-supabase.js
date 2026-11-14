@@ -3,7 +3,7 @@
 const http = require('node:http'), fs = require('node:fs'), path = require('node:path'), { spawn } = require('node:child_process'), crypto = require('node:crypto');
 const PUB = path.join(__dirname, '..', 'public');
 const PSQL = ['-h', '/tmp/pg', '-p', '5544', '-U', 'postgres', '-d', 'gk', '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose'];
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png' };
 const tokens = new Map(); // access → {sub, exp}; refresh → sub
 
 function psql(script, vars) {
@@ -37,6 +37,12 @@ const server = http.createServer(async (req, res) => {
       if (!tk) return json(res, 401, { msg: 'JWT expired' });
       const b = JSON.parse(await body(req)); const r = await psql(`update auth.users set encrypted_password = extensions.crypt(:'pw', extensions.gen_salt('bf')) where id = :'id';`, { pw: b.password, id: tk.sub });
       return json(res, r.code ? 400 : 200, {});
+    }
+    if (u.pathname === '/rest/v1/rpc/join_request') {
+      const b = JSON.parse(await body(req));
+      const r = await psql(`set role anon;\nselect public.join_request(:'n', :'p', :'u', :'w');`, { n: b.p_name, p: b.p_phone, u: b.p_username, w: b.p_password });
+      if (r.code) { const m = /ERROR:\s+(\w{5}):\s*([^\n]*)/.exec(r.err) || []; return json(res, 400, { code: m[1] || 'P0001', message: (m[2] || r.err).trim() }); }
+      const lines = r.out.split('\n'); return json(res, 200, JSON.parse(lines[lines.length - 1]));
     }
     if (u.pathname === '/rest/v1/rpc/api') {
       if (!tk || tk.exp < Date.now()) return json(res, 401, { code: 'PGRST301', message: 'JWT expired' });

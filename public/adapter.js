@@ -4,10 +4,10 @@
 const Adapter = (() => {
   const CAT = Compute.CAT_LABELS;
   const COLS = [
-    ['full_name', 'الاسم الكامل', 26], ['country', 'الدولة', 16], ['phone', 'رقم الهاتف (مع مفتاح الدولة)', 22], ['email', 'البريد الإلكتروني', 24],
+    ['full_name', 'الاسم الكامل', 26], ['country', 'الدولة', 16], ['phone', 'رقم الهاتف (مع مفتاح الدولة)', 22],
     ['category', 'التصنيف', 14], ['guide_name', 'اسم المرشد', 18], ['head', 'رب الأسرة (للتابع)', 22], ['group', 'اسم الفوج', 16], ['leader', 'قائد الفوج', 10],
     ['arrival_date', 'تاريخ الوصول', 14], ['arrival_time', 'وقت الوصول', 11], ['departure_date', 'تاريخ المغادرة', 14], ['flight_no', 'رقم الرحلة', 12],
-    ['airline', 'شركة الطيران', 16], ['airport', 'مطار الوصول', 16], ['transport', 'يحتاج نقل', 10], ['diet_notes', 'ملاحظات الطعام والحساسية', 24], ['notes', 'ملاحظات', 24],
+    ['airline', 'شركة الطيران', 16], ['airport', 'مطار الوصول', 16], ['transport', 'يحتاج نقل', 10], ['notes', 'ملاحظات', 24],
   ];
   const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   const norm = s => String(s ?? '').normalize('NFKC').replace(/[ً-ْٰـ]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -43,6 +43,7 @@ const Adapter = (() => {
       const ad = parseDateCell(get(r, 'arrival_date')), dd = parseDateCell(get(r, 'departure_date')), at = parseTimeCell(get(r, 'arrival_time'));
       const row = { line, _bad_date: ad === null || dd === null, _bad_time: at === null };
       for (const c of COLS) row[c[0]] = String(get(r, c[0]) ?? '').trim();
+      if (norm(row.category) === norm('تابع لأسرة')) row.category = 'تابع لعائلة'; // اسم التصنيف القديم تفهمه دالة الاستيراد
       row.arrival_date = ad || ''; row.departure_date = dd || ''; row.arrival_time = at || ''; return row;
     });
   }
@@ -61,6 +62,7 @@ const Adapter = (() => {
     return wrap(async () => {
       const me = async () => { const r = await rpc('GET', '/me'); return { user: r.user, roles: Compute.ROLE_LABELS }; };
       if (path === '/login') { await SB.login(body.username, body.password); return me(); }
+      if (path === '/join-request') return SB.joinRequest(body);
       if (path === '/logout') { await SB.logout(); return { ok: true }; }
       if (path === '/me') return me();
       if (path === '/change-password') {
@@ -83,12 +85,12 @@ const Adapter = (() => {
       if (path === '/visitors-export') {
         const { visitors } = await rpc('GET', '/visitors', q);
         rpc('POST', '/audit-event', {}, { action: 'export', entity: 'visitor', event_id: +q.event_id, details: { count: visitors.length } }).catch(() => {});
-        const rows = visitors.map(v => [v.full_name, v.country_name, v.phone, v.email, CAT[v.category], v.guide_name, v.head_name || '', v.group_name || '', v.is_leader ? 'نعم' : '', v.arrival_date, v.arrival_time, v.departure_date, v.flight_no, v.airline, v.airport, v.needs_transport ? 'نعم' : 'لا', v.diet_notes, v.notes]);
+        const rows = visitors.map(v => [v.full_name, v.country_name, v.phone, CAT[v.category], v.guide_name, v.head_name || '', v.group_name || '', v.is_leader ? 'نعم' : '', v.arrival_date, v.arrival_time, v.departure_date, v.flight_no, v.airline, v.airport, v.needs_transport ? 'نعم' : 'لا', v.notes]);
         return tableBlob('الزائرون', COLS.map(c => ({ label: c[1], width: c[2] })), rows, q.format);
       }
       if (path === '/visitors-template') {
-        const sample = [['أحمد بن عبدالله', 'ماليزيا', '+60123456789', '', 'رب أسرة', 'الشيخ محمد', '', '', '', '2026-12-20', '14:30', '2026-12-27', 'MH123', 'Malaysia Airlines', 'مطار القاهرة', 'نعم', '', ''],
-          ['فاطمة أحمد', 'ماليزيا', '', '', 'تابع لعائلة', '', 'أحمد بن عبدالله', '', '', '', '', '', '', '', '', '', 'بدون مكسرات', '']];
+        const sample = [['أحمد بن عبدالله', 'ماليزيا', '+60123456789', 'رب أسرة', 'الشيخ محمد', '', '', '', '2026-12-20', '14:30', '2026-12-27', 'MH123', 'Malaysia Airlines', 'مطار القاهرة', 'نعم', ''],
+          ['فاطمة أحمد', 'ماليزيا', '', 'تابع لأسرة', '', 'أحمد بن عبدالله', '', '', '', '', '', '', '', '', '', '']];
         return tableBlob('قالب-الزائرين', COLS.map(c => ({ label: c[1], width: c[2] })), sample, 'xlsx');
       }
       if (path === '/visitors-import') {

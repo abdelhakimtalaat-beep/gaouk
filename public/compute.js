@@ -2,7 +2,7 @@
 // حسابات لوحة التحكم والوجبات والنقل والتقارير — تتم في المتصفح على بيانات رجعت من قاعدة البيانات بعد تطبيق صلاحيات المستخدم
 const Compute = (() => {
   const ROLE_LABELS = { admin: 'مدير النظام', event_manager: 'مدير المناسبة', building_supervisor: 'مشرف المبنى', transport: 'مسؤول النقل', catering: 'مسؤول الإعاشة', country_supervisor: 'مشرف دولة' };
-  const CAT_LABELS = { individual: 'فرد', family_head: 'رب أسرة', family_member: 'تابع لعائلة', group_member: 'عضو في فوج' };
+  const CAT_LABELS = { individual: 'فرد', family_head: 'رب أسرة', family_member: 'تابع لأسرة', group_member: 'عضو في فوج' };
   const isDate = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(s + 'T00:00:00Z').toISOString().slice(0, 10) === s;
   const addDays = (s, n) => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
   const eachDay = (from, to) => { const o = []; for (let d = from; d < to; d = addDays(d, 1)) { o.push(d); if (o.length > 800) break; } return o; };

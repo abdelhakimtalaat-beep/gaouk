@@ -9,7 +9,7 @@ const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 const addDays = (s, n) => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 const DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 const dayName = s => (s ? DAYS[new Date(s + 'T00:00:00Z').getUTCDay()] : '');
-const CAT = { individual: 'فرد', family_head: 'رب أسرة', family_member: 'تابع لعائلة', group_member: 'عضو في فوج' };
+const CAT = { individual: 'فرد', family_head: 'رب أسرة', family_member: 'تابع لأسرة', group_member: 'عضو في فوج' };
 const TASK_STATUS = { not_started: 'لم يبدأ', on_the_way: 'في الطريق', received: 'تم الاستقبال', done: 'انتهت المهمة' };
 const MEAL_AR = { breakfast: 'الإفطار', lunch: 'الغداء', dinner: 'العشاء' };
 const STATE_AR = { free: 'متاحة', partial: 'مشغولة جزئياً', full: 'مكتملة', unavailable: 'خارج الخدمة' };
@@ -120,12 +120,39 @@ App.showLogin = function (msg) {
     <div class="field"><label for="u">اسم المستخدم</label><input id="u" name="username" type="text" autocomplete="username" required autofocus dir="ltr" style="text-align:right"></div>
     <div class="field"><label for="p">كلمة المرور</label><input id="p" name="password" type="password" autocomplete="current-password" required dir="ltr" style="text-align:right"></div>
     <div id="lerr" class="alert err" hidden></div>
-    <button class="btn dark" style="width:100%;justify-content:center;padding:11px">تسجيل الدخول</button></form></div>`;
+    <button class="btn dark" style="width:100%;justify-content:center;padding:11px">تسجيل الدخول</button>
+    <div class="tc" style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--sand-d)"><span class="muted small">ليس لديك حساب؟</span> <button type="button" class="btn ghost sm" id="joinbtn">طلب انضمام</button></div></form></div>`;
+  $('#joinbtn').onclick = App.joinDialog;
   $('#lf').onsubmit = async e => {
     e.preventDefault(); const f = formData(e.target); const btn = $('button', e.target); btn.disabled = true;
     try { const r = await api('POST', '/login', f); App.user = r.user; await App.boot(); }
     catch (err) { const b = $('#lerr'); b.hidden = false; b.textContent = err.message; btn.disabled = false; }
   };
+};
+
+// طلب الانضمام: يرسل الاسم والهاتف وبيانات الدخول، ولا يعمل الحساب حتى يقبله المشرف ويحدد صلاحياته
+App.joinDialog = function () {
+  const body = `<form id="jf" autocomplete="off"><p class="muted" style="margin-top:0">املأ بياناتك وسيصل طلبك إلى المشرف. بعد موافقته وتحديد صلاحياتك تستطيع الدخول بنفس اسم المستخدم وكلمة المرور.</p>
+    <div class="field"><label>الاسم الكامل *</label><input name="name" required></div>
+    <div class="field"><label>رقم الهاتف (مع مفتاح الدولة) *</label><input name="phone" type="tel" required dir="ltr" style="text-align:right" placeholder="+966500000000"></div>
+    <div class="field"><label>اسم المستخدم * (إنجليزي)</label><input name="username" required dir="ltr" style="text-align:right" pattern="[A-Za-z0-9_.\\-]{3,40}" autocomplete="off"></div>
+    <div class="field"><label>كلمة المرور * (8 أحرف على الأقل، حروف وأرقام)</label><input name="password" type="password" required minlength="8" dir="ltr" style="text-align:right" autocomplete="new-password"></div></form>`;
+  modal({ title: 'طلب انضمام', width: 480, body, buttons: [{ label: 'إرسال الطلب', onClick: async m => {
+    const f = $('#jf', m.el); if (!f.reportValidity()) return;
+    await api('POST', '/join-request', formData(f)); m.close();
+    modal({ title: 'تم إرسال طلبك', width: 440, body: '<div class="alert info" style="margin:0">وصل طلبك إلى المشرف. بعد الموافقة وتحديد صلاحياتك ستتمكن من تسجيل الدخول باسم المستخدم وكلمة المرور اللذين أدخلتهما.</div>', buttons: [{ label: 'حسناً', close: true }] });
+  } }, { label: 'إلغاء', cls: 'sec', close: true }] });
+};
+
+// عدّاد طلبات الانضمام المعلقة (للمدير فقط) بجانب «المستخدمون والمشرفون»
+App.refreshPending = async function () {
+  if (!App.user || App.user.role !== 'admin') return;
+  try {
+    const { users } = await api('GET', '/users'); App.pendingCount = users.filter(u => u.status === 'pending').length;
+    const a = document.querySelector('#nav a[data-id=people]'); if (!a) return;
+    let b = a.querySelector('.nav-badge'); if (!b) { b = document.createElement('b'); b.className = 'nav-badge'; a.append(b); }
+    b.textContent = App.pendingCount; b.hidden = !App.pendingCount;
+  } catch (_) {}
 };
 
 // ---------- الإقلاع والهيكل ----------
@@ -138,7 +165,7 @@ App.boot = async function () {
   App.events = ev.events; App.countries = co.countries; App.roleLabels = me.roles; App.user = me.user;
   const saved = parseInt(localStorage.getItem('gaouk_event') || '0', 10);
   App.eventId = App.events.find(e => e.id === saved)?.id || App.pickDefaultEvent();
-  App.buildShell(); window.onhashchange = App.route; App.route(); App.startPulse();
+  App.buildShell(); window.onhashchange = App.route; App.route(); App.startPulse(); App.refreshPending();
 };
 App.pickDefaultEvent = function () {
   const t = todayStr(); const e = App.events.find(x => x.start_date <= t && x.end_date >= t) || App.events.find(x => x.start_date >= t) || App.events[0]; return e ? e.id : null;
@@ -180,7 +207,7 @@ App.route = async function () {
   try { await App.views[id](page, { sub: parts[1], token, stale: () => token !== App._tok }); }
   catch (e) { if (token === App._tok && !(e instanceof ApiError && e.status === 401)) page.innerHTML = `<div class="alert err">${esc(e.message)}</div>`; }
 };
-App.refresh = () => App.route();
+App.refresh = () => { App.route(); App.refreshPending && App.refreshPending(); };
 
 // ---------- مكونات مشتركة ----------
 function tabsHtml(items, cur) { return `<div class="tabs">${items.map(([k, l]) => `<button data-tab="${k}" class="${k === cur ? 'on' : ''}">${esc(l)}</button>`).join('')}</div>`; }

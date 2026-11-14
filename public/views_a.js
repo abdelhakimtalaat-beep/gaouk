@@ -159,34 +159,48 @@ function visitorForm(v, groups, done) {
   const cat = v ? v.category : 'individual';
   const body = `<form id="vf" autocomplete="off"><div id="dupbox"></div>
     <div class="fgrid"><div class="field full"><label>الاسم الكامل *</label><input name="full_name" required value="${esc(v?.full_name)}"></div>
-    ${isMember ? '' : `<div class="field"><label>الدولة *</label><select name="country_id" required>${countryOpts(v?.country_id ?? (countries.length === 1 ? countries[0].id : ''), 'اختر…')}</select></div>
-    <div class="field"><label>التصنيف *</label><select name="category">${opts(Object.entries(CAT).filter(([k]) => k !== 'family_member'), cat)}</select></div>`}
+    ${isMember ? '' : `<div class="field" id="cfield"><label>الدولة *</label><select name="country_id" required>${countryOpts(v?.country_id ?? (countries.length === 1 ? countries[0].id : ''), 'اختر…')}</select></div>
+    <div class="field"><label>التصنيف *</label><select name="category">${opts(Object.entries(CAT), cat)}</select></div>`}
     <div class="field"><label>رقم الهاتف (مع مفتاح الدولة)</label><input type="tel" name="phone" dir="ltr" style="text-align:right" placeholder="+60123456789" value="${esc(v?.phone)}"></div>
-    <div class="field"><label>البريد الإلكتروني (اختياري)</label><input type="email" name="email" dir="ltr" style="text-align:right" value="${esc(v?.email)}"></div>
-    ${isMember ? `<div class="field"><label>صلة القرابة</label><input name="relation" value="${esc(v?.relation)}"></div>` : `<div class="field"><label>اسم المرشد أو المسؤول عنه</label><input name="guide_name" value="${esc(v?.guide_name)}"></div>`}</div>
+    ${isMember ? `<div class="field"><label>صلة القرابة</label><input name="relation" value="${esc(v?.relation)}"></div>` : `<div class="field" id="gfield"><label>اسم المرشد أو المسؤول عنه</label><input name="guide_name" value="${esc(v?.guide_name)}"></div>`}</div>
     ${isMember ? '<div class="alert info">بيانات السفر والدولة لهذا التابع تُؤخذ من رب الأسرة.</div>' : `
+    <div id="headbox" class="fgrid" hidden><div class="field"><label>رب الأسرة *</label><div class="row"><b id="headname" class="badge ok" style="font-size:.95rem">—</b><button type="button" class="btn sec sm" id="pickhead">اختيار / تغيير رب الأسرة</button></div></div>
+      <div class="field"><label>صلة القرابة</label><input name="relation" value="${esc(v?.relation)}"></div><div class="field full"><div class="alert info" style="margin:0">الدولة وبيانات الرحلة لهذا التابع تُؤخذ تلقائياً من رب الأسرة.</div></div></div>
     <div id="grpbox" class="fgrid" hidden><div class="field"><label>الفوج *</label><select name="group_id">${opts(groups.map(g => [g.id, `${g.name} (${g.country_name})`]), v?.group_id, 'اختر الفوج…')}</select></div>
       <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" name="is_leader" ${v?.is_leader ? 'checked' : ''}> قائد الفوج</label><button type="button" class="btn ghost sm" id="newg">+ إنشاء فوج جديد</button></div></div>
-    <h3>مواعيد وبيانات الرحلة</h3><div class="fgrid"><div class="field"><label>تاريخ الوصول</label><input type="date" name="arrival_date" value="${esc(v?.arrival_date)}"></div>
+    <div id="travbox"><h3>مواعيد وبيانات الرحلة</h3><div class="fgrid"><div class="field"><label>تاريخ الوصول</label><input type="date" name="arrival_date" value="${esc(v?.arrival_date)}"></div>
     <div class="field"><label>وقت الوصول</label><input type="time" name="arrival_time" value="${esc(v?.arrival_time)}"></div><div class="field"><label>تاريخ المغادرة</label><input type="date" name="departure_date" value="${esc(v?.departure_date)}"></div>
     <div class="field"><label>رقم الرحلة</label><input name="flight_no" dir="ltr" style="text-align:right" value="${esc(v?.flight_no)}"></div><div class="field"><label>شركة الطيران</label><input name="airline" value="${esc(v?.airline)}"></div>
     <div class="field"><label>مطار الوصول</label><input name="airport" value="${esc(v?.airport)}"></div>
-    <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" name="needs_transport" ${v ? (v.needs_transport ? 'checked' : '') : 'checked'}> يحتاج سيارة استقبال/توصيل</label></div></div>`}
-    <div class="fgrid"><div class="field"><label>ملاحظات الطعام والحساسية</label><textarea name="diet_notes" style="min-height:56px">${esc(v?.diet_notes)}</textarea></div><div class="field"><label>ملاحظات خاصة</label><textarea name="notes" style="min-height:56px">${esc(v?.notes)}</textarea></div></div>
+    <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" name="needs_transport" ${v ? (v.needs_transport ? 'checked' : '') : 'checked'}> يحتاج سيارة استقبال/توصيل</label></div></div></div>`}
+    <div class="fgrid"><div class="field full"><label>ملاحظات خاصة</label><textarea name="notes" style="min-height:56px">${esc(v?.notes)}</textarea></div></div>
     <div id="fambox" ${cat === 'family_head' ? '' : 'hidden'}><h3>أفراد الأسرة <span class="badge">العدد الكلي: <span id="famcount">${1 + members.length}</span></span></h3><div class="members-edit" id="mrows"></div><button type="button" class="btn sec sm" id="addm">+ إضافة فرد</button></div></form>`;
-  const mrow = m => `<div class="mrow" data-id="${m?.id || ''}"><input placeholder="الاسم الكامل" data-k="full_name" value="${esc(m?.full_name)}"><input placeholder="صلة القرابة" data-k="relation" value="${esc(m?.relation)}"><input placeholder="الهاتف" data-k="phone" dir="ltr" value="${esc(m?.phone)}"><input placeholder="طعام / حساسية" data-k="diet_notes" value="${esc(m?.diet_notes)}"><button type="button" class="btn sm danger" data-rm>×</button></div>`;
+  const mrow = m => `<div class="mrow" data-id="${m?.id || ''}"><input placeholder="الاسم الكامل" data-k="full_name" value="${esc(m?.full_name)}"><input placeholder="صلة القرابة" data-k="relation" value="${esc(m?.relation)}"><input placeholder="الهاتف" data-k="phone" dir="ltr" value="${esc(m?.phone)}"><button type="button" class="btn sm danger" data-rm>×</button></div>`;
   const m = modal({ title: isNew ? 'زائر جديد' : 'تعديل: ' + v.full_name, width: 860, body, buttons: [{ label: isNew ? 'حفظ' : 'حفظ التعديلات', onClick: async mm => save(mm, false) }, { label: 'إلغاء', cls: 'sec', close: true }] });
   const F = $('#vf', m.el);
-  const sync = () => { const c = F.category?.value; if ($('#grpbox', m.el)) $('#grpbox', m.el).hidden = c !== 'group_member'; $('#fambox', m.el).hidden = c !== 'family_head' && !(v && v.category === 'family_head'); $('#famcount', m.el).textContent = 1 + $$('.mrow', m.el).length; };
+  let headId = null, headCountry = '', prevCat = cat;
+  const sync = () => { const c = F.category?.value; if ($('#grpbox', m.el)) $('#grpbox', m.el).hidden = c !== 'group_member';
+    if ($('#headbox', m.el)) { const fm = c === 'family_member'; $('#headbox', m.el).hidden = !fm; $('#travbox', m.el).hidden = fm; $('#cfield', m.el).hidden = fm; $('#gfield', m.el).hidden = fm; F.country_id.disabled = fm; } $('#fambox', m.el).hidden = c !== 'family_head' && !(v && v.category === 'family_head'); $('#famcount', m.el).textContent = 1 + $$('.mrow', m.el).length; };
   members.forEach(x => $('#mrows', m.el).insertAdjacentHTML('beforeend', mrow(x)));
   if (cat === 'family_head' && !members.length && isNew === false) {}
   $('#addm', m.el).onclick = () => { $('#mrows', m.el).insertAdjacentHTML('beforeend', mrow()); sync(); $$('.mrow input', m.el).pop().focus(); };
   m.el.onclick = e => { const r = e.target.closest('[data-rm]'); if (r) { r.closest('.mrow').remove(); sync(); } };
-  if (F.category) F.category.onchange = sync; sync();
+  const showHead = () => { const h = headRef.cur; $('#headname', m.el).textContent = h ? `${h.full_name} (${h.country_name})` : 'لم يُحدَّد بعد'; };
+  const headRef = { cur: null };
+  async function chooseHead() {
+    const h = await pickHead(); if (!h) return false;
+    headRef.cur = h; headId = h.id; headCountry = h.country_id; showHead(); check(); return true;
+  }
+  if (F.category) F.category.onchange = async () => {
+    if (F.category.value === 'family_member') { if (!headId && !(await chooseHead())) { F.category.value = prevCat === 'family_member' ? 'individual' : prevCat; } }
+    prevCat = F.category.value; sync();
+  };
+  if ($('#pickhead', m.el)) $('#pickhead', m.el).onclick = chooseHead;
+  sync();
   $('#newg', m.el) && ($('#newg', m.el).onclick = () => groupForm({ country_id: F.country_id.value }, async id => { const gs = (await api('GET', '/groups?event_id=' + App.eventId)).groups; groups.splice(0, groups.length, ...gs); F.group_id.innerHTML = opts(gs.map(g => [g.id, `${g.name} (${g.country_name})`]), id, 'اختر الفوج…'); }));
   const check = debounce(async () => {
     if (!F.full_name.value.trim() && !F.phone.value.trim()) return;
-    try { const r = await api('POST', '/visitors/check-duplicate', { event_id: App.eventId, full_name: F.full_name.value, phone: F.phone.value, country_id: F.country_id ? F.country_id.value : v.country_id, exclude_id: v?.id });
+    try { const r = await api('POST', '/visitors/check-duplicate', { event_id: App.eventId, full_name: F.full_name.value, phone: F.phone.value, country_id: F.country_id && !F.country_id.disabled ? F.country_id.value : (headCountry || v?.country_id), exclude_id: v?.id });
       $('#dupbox', m.el).innerHTML = r.duplicates.length ? dupHtml(r.duplicates) : ''; } catch (_) {}
   }, 400);
   ['full_name', 'phone'].forEach(k => F[k].addEventListener('input', check)); if (F.country_id) F.country_id.addEventListener('change', check);
@@ -195,6 +209,7 @@ function visitorForm(v, groups, done) {
     b.event_id = App.eventId; b.needs_transport = F.needs_transport ? F.needs_transport.checked : undefined;
     if (!isMember && b.category === 'family_head') b.members = $$('.mrow', mm.el).map(r => ({ id: r.dataset.id || undefined, ...Object.fromEntries($$('input[data-k]', r).map(i => [i.dataset.k, i.value])) })).filter(x => x.full_name.trim());
     if (isMember) delete b.category;
+    if (b.category === 'family_member') { if (!headId) { toast('اختر رب الأسرة أولاً', 'warn'); return; } b.head_id = headId; }
     if (force) b.force = true;
     try { isNew ? await api('POST', '/visitors', b) : await api('PUT', '/visitors/' + v.id, b); }
     catch (e) {
@@ -210,6 +225,21 @@ function visitorForm(v, groups, done) {
     mm.close(); toast('تم الحفظ'); done();
   }
 }
+// نافذة اختيار رب الأسرة (للتصنيف «تابع لأسرة»)
+async function pickHead() {
+  let heads;
+  try { heads = (await api('GET', '/visitors?event_id=' + App.eventId)).visitors.filter(x => x.category === 'family_head'); } catch (e) { toast(e.message, 'err'); return null; }
+  return new Promise(res => {
+    let fin = false; const done = x => { if (!fin) { fin = true; res(x); } };
+    const draw = t => { const n = Compute.norm ? Compute.norm(t) : t.trim(); const list = heads.filter(h => !t.trim() || (h.full_name + ' ' + h.country_name + ' ' + (h.phone || '')).includes(t.trim()));
+      return list.length ? list.map(h => `<label style="cursor:pointer"><input type="radio" name="hd" value="${h.id}"> <b>${esc(h.full_name)}</b> <span class="muted small">— ${esc(h.country_name)}${h.phone ? ' — ' + esc(h.phone) : ''}</span></label>`).join('') : '<div class="empty">لا يوجد رب أسرة مطابق. سجّل رب الأسرة أولاً بتصنيف «رب أسرة».</div>'; };
+    const m = modal({ title: 'اختر رب الأسرة', width: 560, onClose: () => done(null),
+      body: `<div class="field"><input type="search" id="hq" placeholder="ابحث بالاسم أو الدولة أو الهاتف…" autofocus></div><div class="sel-list" id="hl" style="max-height:320px">${draw('')}</div>`,
+      buttons: [{ label: 'اختيار', onClick: x => { const r = $('input[name=hd]:checked', x.el); if (!r) { toast('اختر رب الأسرة من القائمة', 'warn'); return; } done(heads.find(h => h.id === +r.value)); x.close(); } }, { label: 'إلغاء', cls: 'sec', onClick: x => { done(null); x.close(); } }] });
+    $('#hq', m.el).oninput = e => { $('#hl', m.el).innerHTML = draw(e.target.value); };
+    $('#hl', m.el).ondblclick = e => { const r = e.target.closest('label')?.querySelector('input'); if (r) { done(heads.find(h => h.id === +r.value)); m.close(); } };
+  });
+}
 function dupHtml(list) {
   return `<div class="alert warn"><b>تنبيه تكرار محتمل:</b><ul style="margin:6px 0 0;padding-inline-start:20px">${list.map(d => d.hidden ? `<li>«${esc(d.candidate)}»: ${esc(d.reason)} — مسجل لدى دولة أخرى</li>`
     : `<li>«${esc(d.candidate)}» يشبه <b>${esc(d.full_name)}</b> (${esc(d.country_name)}${d.phone ? ' — ' + esc(d.phone) : ''}) — ${esc(d.reason)}، سجّله: ${esc(d.created_by)}</li>`).join('')}</ul></div>`;
@@ -217,11 +247,11 @@ function dupHtml(list) {
 
 async function visitorDetail(id, writer, done) {
   const v = (await api('GET', '/visitors/' + id)).visitor;
-  const body = `<div class="fgrid"><div><b>الدولة:</b> ${esc(v.country_name)}</div><div><b>التصنيف:</b> ${CAT[v.category]}${v.is_leader ? ' (قائد الفوج)' : ''}</div><div><b>الهاتف:</b> <span class="ltr">${esc(v.phone) || '—'}</span></div><div><b>البريد:</b> ${esc(v.email) || '—'}</div>
+  const body = `<div class="fgrid"><div><b>الدولة:</b> ${esc(v.country_name)}</div><div><b>التصنيف:</b> ${CAT[v.category]}${v.is_leader ? ' (قائد الفوج)' : ''}</div><div><b>الهاتف:</b> <span class="ltr">${esc(v.phone) || '—'}</span></div>
     <div><b>المرشد:</b> ${esc(v.guide_name) || '—'}</div><div><b>${v.head_name ? 'رب الأسرة' : 'الفوج'}:</b> ${esc(v.head_name || v.group_name) || '—'}</div>
     <div><b>الوصول:</b> ${fmtDate(v.arrival_date, v.arrival_time)}</div><div><b>المغادرة:</b> ${fmtDate(v.departure_date)}</div><div><b>الرحلة:</b> ${esc([v.airline, v.flight_no].filter(Boolean).join(' ')) || '—'}</div><div><b>المطار:</b> ${esc(v.airport) || '—'}</div>
-    <div class="full"><b>طعام وحساسية:</b> ${esc(v.diet_notes) || '—'}</div><div class="full"><b>ملاحظات:</b> ${esc(v.notes) || '—'}</div></div>
-    ${v.members.length ? `<h3 style="margin-top:14px">أفراد الأسرة (${v.members.length})</h3><ul>${v.members.map(m => `<li>${esc(m.full_name)} ${m.relation ? `<span class="muted">(${esc(m.relation)})</span>` : ''}${m.diet_notes ? ` — <span class="badge warn">${esc(m.diet_notes)}</span>` : ''}</li>`).join('')}</ul>` : ''}
+    <div class="full"><b>ملاحظات:</b> ${esc(v.notes) || '—'}</div></div>
+    ${v.members.length ? `<h3 style="margin-top:14px">أفراد الأسرة (${v.members.length})</h3><ul>${v.members.map(m => `<li>${esc(m.full_name)} ${m.relation ? `<span class="muted">(${esc(m.relation)})</span>` : ''}</li>`).join('')}</ul>` : ''}
     <h3 style="margin-top:14px">الغرفة المخصصة</h3>${v.bookings.length ? v.bookings.map(b => `<div class="badge free" style="margin:2px">${esc(roomLabel(b))} — ${b.from_date} ← ${b.to_date}</div>`).join('') : '<div class="muted">لم يتم التسكين بعد</div>'}
     <h3 style="margin-top:14px">السيارة والسائق</h3>${v.transports.length ? v.transports.map(t => `<div>${t.kind === 'pickup' ? 'استقبال' : 'توصيل'} ${t.task_date}${t.task_time ? ' ' + t.task_time : ''} — <b>${esc(t.driver_name)}</b> <span class="ltr">${esc(t.driver_phone)}</span> — ${esc(t.car_type)} <span class="ltr">${esc(t.car_number)}</span> — <span class="badge">${TASK_STATUS[t.status]}</span></div>`).join('') : '<div class="muted">لم يُكلَّف سائق بعد</div>'}`;
   modal({ title: v.full_name, width: 760, body, buttons: [...(writer ? [{ label: 'تعديل', onClick: async m => { const g = (await api('GET', '/groups?event_id=' + App.eventId)).groups; m.close(); visitorForm(v, g, done); } }] : []), { label: 'إغلاق', cls: 'sec', close: true }] });

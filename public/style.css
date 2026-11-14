@@ -59,7 +59,7 @@ a{color:var(--olive)}
 .btn.sec{background:var(--white);color:var(--g8);border:1px solid var(--sand-d)}
 .btn.dark{background:var(--g8)}.btn.danger{background:var(--danger)}.btn.sm{padding:4px 10px;font-size:.85rem}
 .btn.ghost{background:none;color:var(--olive);padding:4px 8px}
-input[type=text],input[type=password],input[type=email],input[type=tel],input[type=date],input[type=time],input[type=number],input[type=search],select,textarea{width:100%;padding:8px 10px;border:1px solid var(--sand-d);border-radius:8px;background:var(--white);min-height:38px}
+input:not([type]),input[type=text],input[type=password],input[type=email],input[type=tel],input[type=date],input[type=time],input[type=number],input[type=search],select,textarea{width:100%;padding:8px 10px;border:1px solid var(--sand-d);border-radius:8px;background:var(--white);min-height:38px}
 input:focus,select:focus,textarea:focus{outline:2px solid var(--olive-l);border-color:var(--olive)}
 textarea{min-height:70px;resize:vertical}
 label{display:block;font-weight:600;font-size:.88rem;margin-bottom:3px;color:var(--g8)}
@@ -122,7 +122,7 @@ td.actions{white-space:nowrap}
 .sel-list{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:9px;background:#fff}
 .sel-list label{display:flex;gap:8px;align-items:center;padding:6px 10px;border-bottom:1px solid #edf2de;font-weight:500;margin:0;cursor:pointer}
 .sel-list label:hover{background:#f4faee}.sel-list input{width:auto}
-.members-edit .mrow{display:grid;grid-template-columns:1.6fr 1fr 1fr 1.4fr auto;gap:8px;margin-bottom:8px;align-items:center}
+.members-edit .mrow{display:grid;grid-template-columns:1.8fr 1fr 1.2fr auto;gap:8px;margin-bottom:8px;align-items:center}
 .kitchen-sheet h2{text-align:center}
 .print-only{display:none}
 
@@ -201,7 +201,7 @@ body{background:linear-gradient(180deg,#f7f9ee,#f1f6e6) fixed}
 .btn.gold{background:linear-gradient(135deg,var(--gold),#f3cd4f);color:var(--g9)}
 .btn.ghost{background:none;color:var(--g7);box-shadow:none}
 .btn.ghost:hover{background:var(--mint);transform:none;box-shadow:none}
-input[type=text],input[type=password],input[type=email],input[type=tel],input[type=date],input[type=time],input[type=number],input[type=search],select,textarea{border:1px solid #d6dcc0;border-radius:10px;background:#fff;transition:border-color .15s,box-shadow .15s}
+input:not([type]),input[type=text],input[type=password],input[type=email],input[type=tel],input[type=date],input[type=time],input[type=number],input[type=search],select,textarea{border:1px solid #d6dcc0;border-radius:10px;background:#fff;transition:border-color .15s,box-shadow .15s}
 input:focus,select:focus,textarea:focus{outline:0;border-color:var(--olive);box-shadow:0 0 0 3px rgba(46,139,79,.2)}
 label{color:var(--g8)}
 .table-wrap{border-radius:var(--r);box-shadow:var(--shadow);border-color:var(--line)}
@@ -227,3 +227,6 @@ td{border-bottom:1px solid #edf1de}
 ::selection{background:var(--gold-l)}
 @media (max-width:900px){.login-card .brand img.logo-img{height:92px}.page{padding:14px}.page-head h1{font-size:1.3rem}}
 @media print{.brand img.logo-img{display:none}}
+
+.nav-badge{margin-right:auto;background:var(--danger);color:#fff;border-radius:20px;min-width:22px;height:22px;padding:0 7px;display:inline-grid;place-items:center;font-size:.78rem;font-weight:800;box-shadow:0 0 0 2px rgba(255,255,255,.25)}
+.side nav a.on .nav-badge{box-shadow:0 0 0 2px rgba(255,255,255,.7)}

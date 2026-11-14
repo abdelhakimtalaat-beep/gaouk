@@ -3,19 +3,23 @@
 
 /* ================= المستخدمون والمشرفون ================= */
 App.view('people', async (page, ctx) => {
-  const tab = ctx.sub || 'country';
   const [{ users }, { buildings }] = await Promise.all([api('GET', '/users'), api('GET', '/structure')]); if (ctx.stale()) return;
-  const groups = { country: ['country_supervisor'], building: ['building_supervisor'], other: ['admin', 'event_manager', 'transport', 'catering'] };
+  const tab = ctx.sub || (users.some(u => u.status === 'pending') ? 'requests' : 'country');
+  const groups = { requests: ['pending'], country: ['country_supervisor'], building: ['building_supervisor'], other: ['admin', 'event_manager', 'transport', 'catering'] };
   const list = users.filter(u => groups[tab].includes(u.role));
-  const titles = { country: 'مشرفو الدول', building: 'مشرفو المباني', other: 'بقية المستخدمين' };
-  page.innerHTML = `<div class="page-head"><h1>المستخدمون والمشرفون</h1><div class="grow"></div><button class="btn" id="add">+ ${tab === 'country' ? 'مشرف دولة جديد' : tab === 'building' ? 'مشرف مبنى جديد' : 'مستخدم جديد'}</button></div>
+  const titles = { requests: 'طلبات الانضمام', country: 'مشرفو الدول', building: 'مشرفو المباني', other: 'بقية المستخدمين' };
+  page.innerHTML = `<div class="page-head"><h1>المستخدمون والمشرفون</h1><div class="grow"></div>${tab === 'requests' ? '' : `<button class="btn" id="add">+ ${tab === 'country' ? 'مشرف دولة جديد' : tab === 'building' ? 'مشرف مبنى جديد' : 'مستخدم جديد'}</button>`}</div>
     <div class="tabs">${Object.entries(titles).map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" onclick="location.hash='#/people/${k}'">${l} (${users.filter(u => groups[k].includes(u.role)).length})</button>`).join('')}</div>
     ${tab === 'country' ? '<div class="alert info">لكل دولة مشرف أو أكثر. يرى مشرف الدولة ويعدّل بيانات دولته فقط، ولا يطّلع على الدول الأخرى إلا إذا فوّضته هنا بدولة إضافية.</div>' : ''}
+    ${tab === 'requests' ? `<div class="alert info">كل من يفتح رابط التطبيق ويسجّل اسمه ورقم هاتفه يظهر هنا. لا يستطيع الدخول قبل قبولك له وتحديد صلاحياته (مشرف عام، أو مشرف دولة/دول، أو مشرف مبنى/مبانٍ).</div>
+    <div class="table-wrap"><table><thead><tr><th>الاسم</th><th>رقم الهاتف</th><th>اسم المستخدم</th><th>تاريخ الطلب</th><th></th></tr></thead><tbody>
+    ${list.map(u => `<tr><td><b>${esc(u.name)}</b></td><td><span class="ltr">${esc(u.phone)}</span></td><td><span class="ltr">${esc(u.username)}</span></td><td>${fmtDate(String(u.created_at).slice(0, 10))}</td>
+      <td class="actions"><button class="btn sm" data-a="${u.id}">قبول وتحديد الصلاحيات</button> <button class="btn sm danger" data-r="${u.id}">رفض</button></td></tr>`).join('') || '<tr><td colspan="5" class="empty">لا توجد طلبات انضمام معلقة</td></tr>'}</tbody></table></div>` : `
     <div class="table-wrap"><table><thead><tr><th>الاسم</th><th>اسم المستخدم</th><th>الهاتف / البريد</th>${tab === 'country' ? '<th>الدولة المسؤول عنها</th>' : tab === 'building' ? '<th>المباني والأدوار</th>' : '<th>الدور</th>'}<th>الحالة</th><th></th></tr></thead><tbody>
     ${list.map(u => `<tr><td><b>${esc(u.name)}</b>${u.notes ? `<div class="muted small">${esc(u.notes)}</div>` : ''}</td><td><span class="ltr">${esc(u.username)}</span></td><td><span class="ltr">${esc(u.phone)}</span><div class="muted small ltr">${esc(u.email)}</div></td>
       <td>${tab === 'country' ? u.countries.map(c => `<span class="badge ${c.is_primary ? 'ok' : 'info'}">${esc(c.name)}${c.is_primary ? '' : ' (تفويض)'}</span>`).join(' ') : tab === 'building' ? floorsText(u.floors) : esc(App.roleLabels[u.role])}</td>
       <td><span class="badge ${u.status === 'active' ? 'ok' : 'bad'}">${u.status === 'active' ? 'نشط' : 'موقوف'}</span></td>
-      <td class="actions"><button class="btn sm sec" data-e="${u.id}">تعديل</button> ${u.id !== App.user.id ? `<button class="btn sm sec" data-t="${u.id}">${u.status === 'active' ? 'إيقاف' : 'تنشيط'}</button> <button class="btn sm danger" data-d="${u.id}">حذف</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">لا توجد حسابات</td></tr>'}</tbody></table></div>`;
+      <td class="actions"><button class="btn sm sec" data-e="${u.id}">تعديل</button> ${u.id !== App.user.id ? `<button class="btn sm sec" data-t="${u.id}">${u.status === 'active' ? 'إيقاف' : 'تنشيط'}</button> <button class="btn sm danger" data-d="${u.id}">حذف</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">لا توجد حسابات</td></tr>'}</tbody></table></div>`}`;
   const form = u => {
     const role0 = u ? u.role : (tab === 'country' ? 'country_supervisor' : tab === 'building' ? 'building_supervisor' : 'event_manager');
     const roleOpts = tab === 'other' ? Object.entries(App.roleLabels).filter(([k]) => groups.other.includes(k)) : [[role0, App.roleLabels[role0]]];
@@ -27,7 +31,7 @@ App.view('people', async (page, ctx) => {
       <div class="field"><label>حالة الحساب</label><select name="status">${opts([['active', 'نشط'], ['suspended', 'موقوف']], u?.status || 'active')}</select></div>
       <div id="cbox" class="field full" ${role0 === 'country_supervisor' ? '' : 'hidden'}><div class="fgrid"><div class="field"><label>الدولة المسؤول عنها *</label><select name="country_id">${countryOpts(prim, 'اختر…')}</select></div>
         <div class="field"><label>دول إضافية مفوَّض بها (اختياري)</label><div class="sel-list" style="max-height:130px">${App.countries.map(c => `<label><input type="checkbox" name="extra_country_ids[]" value="${c.id}" ${extra.includes(c.id) ? 'checked' : ''}> ${esc(c.name)}</label>`).join('')}</div></div></div></div>
-      <div id="fbox" class="field full" ${role0 === 'building_supervisor' ? '' : 'hidden'}><label>الأدوار المسؤول عنها (يمكن أكثر من دور أو مبنى)</label><div class="sel-list" style="max-height:200px">${buildings.map(b => `<div style="padding:4px 10px;background:#f6f0e1;font-weight:700">${esc(b.name)}</div>${b.floors.map(f => `<label><input type="checkbox" name="floor_ids[]" value="${f.id}" ${myF.includes(f.id) ? 'checked' : ''}> ${esc(f.name)}</label>`).join('')}`).join('')}</div></div>
+      <div id="fbox" class="field full" ${role0 === 'building_supervisor' ? '' : 'hidden'}><label>الأدوار المسؤول عنها (يمكن أكثر من دور أو مبنى)</label><div class="sel-list" style="max-height:200px">${buildings.map(b => `<div style="padding:4px 10px;background:#f6f8ec;font-weight:700">${esc(b.name)}</div>${b.floors.map(f => `<label><input type="checkbox" name="floor_ids[]" value="${f.id}" ${myF.includes(f.id) ? 'checked' : ''}> ${esc(f.name)}</label>`).join('')}`).join('')}</div></div>
       <div class="field full"><label>ملاحظات</label><textarea name="notes" style="min-height:56px">${esc(u?.notes)}</textarea></div></div></form>`;
     const m = modal({ title: u ? 'تعديل: ' + u.name : 'حساب جديد', width: 760, body, buttons: [{ label: 'حفظ', onClick: async mm => {
       const f = $('#uf', mm.el); if (!f.reportValidity()) return; const b = formData(f);
@@ -36,9 +40,26 @@ App.view('people', async (page, ctx) => {
     } }, { label: 'إلغاء', cls: 'sec', close: true }] });
     $('#rl', m.el).onchange = e => { $('#cbox', m.el).hidden = e.target.value !== 'country_supervisor'; $('#fbox', m.el).hidden = e.target.value !== 'building_supervisor'; };
   };
-  $('#add').onclick = () => form();
+  const approve = u => {
+    const roles = [['admin', 'مشرف عام — يتحكم في كامل التطبيق'], ['country_supervisor', 'مشرف دولة — يختار دولة أو أكثر'], ['building_supervisor', 'مشرف مبنى — يختار مبنى أو أكثر'], ['event_manager', 'مدير مناسبات'], ['transport', 'مسؤول النقل'], ['catering', 'مسؤول الإعاشة']];
+    const body = `<form id="af"><div class="alert info" style="margin-top:0"><b>${esc(u.name)}</b> — <span class="ltr">${esc(u.phone)}</span> — اسم المستخدم: <span class="ltr">${esc(u.username)}</span></div>
+      <div class="field"><label>نوع الصلاحية *</label><select name="role" id="arl" required>${opts(roles, '', 'اختر الصلاحية…')}</select></div>
+      <div id="acb" class="field" hidden><label>الدول المسؤول عنها * (يمكن اختيار أكثر من دولة)</label><div class="sel-list" style="max-height:220px">${App.countries.map(c => `<label><input type="checkbox" name="cids[]" value="${c.id}"> ${esc(c.name)}</label>`).join('') || '<div class="empty">لا توجد دول. أضفها من «الدول والجنسيات»</div>'}</div></div>
+      <div id="abb" class="field" hidden><label>المباني المسؤول عنها * (يمكن اختيار أكثر من مبنى، ويشمل كل أدواره)</label><div class="sel-list" style="max-height:220px">${buildings.map(b => `<label><input type="checkbox" name="bids[]" value="${b.id}" data-f="${b.floors.map(f => f.id).join(',')}"> ${esc(b.name)} <span class="muted small">(${b.floors.length} أدوار)</span></label>`).join('')}</div></div></form>`;
+    const m = modal({ title: 'قبول طلب الانضمام', width: 560, body, buttons: [{ label: 'قبول وتفعيل الحساب', onClick: async mm => {
+      const f = $('#af', mm.el); if (!f.reportValidity()) return; const role = f.role.value;
+      const b = { name: u.name, phone: u.phone, notes: u.notes, role, status: 'active' };
+      if (role === 'country_supervisor') { const ids = $$('input[name="cids[]"]:checked', f).map(x => +x.value); if (!ids.length) return toast('اختر دولة واحدة على الأقل', 'warn'); b.country_id = ids[0]; b.extra_country_ids = ids.slice(1); }
+      if (role === 'building_supervisor') { const fl = $$('input[name="bids[]"]:checked', f).flatMap(x => x.dataset.f.split(',').filter(Boolean).map(Number)); if (!fl.length) return toast('اختر مبنى واحداً على الأقل (له أدوار)', 'warn'); b.floor_ids = fl; }
+      await api('PUT', '/users/' + u.id, b); mm.close(); toast('تم قبول الطلب وتفعيل الحساب'); App.refresh();
+    } }, { label: 'إلغاء', cls: 'sec', close: true }] });
+    $('#arl', m.el).onchange = e => { $('#acb', m.el).hidden = e.target.value !== 'country_supervisor'; $('#abb', m.el).hidden = e.target.value !== 'building_supervisor'; };
+  };
+  if ($('#add')) $('#add').onclick = () => form();
   page.onclick = async e => {
-    const b = e.target.closest('button'); if (!b) return; const id = +(b.dataset.e || b.dataset.t || b.dataset.d); const u = users.find(x => x.id === id); if (!u) return;
+    const b = e.target.closest('button'); if (!b) return; const id = +(b.dataset.e || b.dataset.t || b.dataset.d || b.dataset.a || b.dataset.r); const u = users.find(x => x.id === id); if (!u) return;
+    if (b.dataset.a) return approve(u);
+    if (b.dataset.r) { if (await confirmBox(`رفض طلب «${u.name}»؟ سيُحذف الطلب ولن يستطيع الدخول.`, { danger: true, okText: 'رفض' })) { await api('DELETE', '/users/' + id); toast('تم رفض الطلب'); App.refresh(); } return; }
     if (b.dataset.e) form(u);
     if (b.dataset.t) { await api('PUT', '/users/' + id, { ...u, country_id: u.countries.find(c => c.is_primary)?.id, extra_country_ids: u.countries.filter(c => !c.is_primary).map(c => c.id), floor_ids: u.floors.map(f => f.id), status: u.status === 'active' ? 'suspended' : 'active' }); toast(u.status === 'active' ? 'تم إيقاف الحساب' : 'تم تنشيط الحساب'); App.refresh(); }
     if (b.dataset.d && await confirmBox(`حذف حساب «${u.name}»؟ يبقى اسمه في سجل العمليات.`, { danger: true, okText: 'حذف' })) { await api('DELETE', '/users/' + id); toast('تم الحذف'); App.refresh(); }
@@ -85,7 +106,7 @@ App.view('reports', async (page, ctx) => {
     $('#out').innerHTML = `<div class="card" id="sheet"><div class="row no-print" style="margin-bottom:10px"><h2 style="margin:0">${esc(d.title)}</h2><span class="badge">${d.rows.length} سطر</span><div class="grow"></div><button class="btn sec" id="pr">طباعة / PDF</button><button class="btn sec" id="xl">تصدير Excel</button><button class="btn sec" id="cv">CSV</button></div>
       <div class="print-only tc" style="margin-bottom:10px"><h2>جاؤوك — ${esc(d.title)}</h2><div>${esc(d.event)} ${d.subtitle ? '— ' + esc(d.subtitle) : ''}</div><div class="small">أُعدّ بواسطة ${esc(d.generated_by)} — ${new Date(d.generated_at).toLocaleString('ar-EG')}</div></div>
       ${d.subtitle ? `<div class="muted" style="margin-bottom:8px">${esc(d.subtitle)}</div>` : ''}<div class="table-wrap"><table><thead><tr>${d.columns.map(c => `<th>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>
-      ${d.rows.map(r => `<tr${r.country === 'الإجمالي' ? ' style="font-weight:700;background:#f1ead3"' : ''}>${d.columns.map(c => `<td>${esc(r[c.key] ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${d.columns.length}" class="empty">لا توجد بيانات لهذا التقرير</td></tr>`}</tbody></table></div></div>`;
+      ${d.rows.map(r => `<tr${r.country === 'الإجمالي' ? ' style="font-weight:700;background:#fdf1b8"' : ''}>${d.columns.map(c => `<td>${esc(r[c.key] ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${d.columns.length}" class="empty">لا توجد بيانات لهذا التقرير</td></tr>`}</tbody></table></div></div>`;
     $('#pr').onclick = () => printNow($('#sheet')); $('#xl').onclick = () => download(`/reports/${R.type}?` + qs({ ...p, format: 'xlsx' }), `gaouk-${R.type}-${todayStr()}.xlsx`); $('#cv').onclick = () => download(`/reports/${R.type}?` + qs({ ...p, format: 'csv' }), `gaouk-${R.type}-${todayStr()}.csv`);
   }
   $('#run').onclick = run; await run();

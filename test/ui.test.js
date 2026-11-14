@@ -125,6 +125,47 @@ const t = async (name, fn) => { try { await fn(); passed++; console.log('  ✓',
   });
   await t('عرض التابلت (820px) سليم', async () => { const tb = await newPage(820, 1000); await login(tb, 'admin', 'AdminPass123'); await go(tb, '#/visitors', '#vlist'); await tb.screenshot({ path: OUT + '/17-tablet-visitors.png' }); });
 
+
+  console.log('\nتصنيف «تابع لأسرة» وطلبات الانضمام');
+  await t('النموذج بلا البريد وملاحظات الطعام، والتابع يختار رب الأسرة من نافذة', async () => {
+    await go(p, '#/visitors', '#addv'); await p.click('#addv'); await p.waitForSelector('#vf');
+    assert.equal(await p.$$eval('#vf [name=email], #vf [name=diet_notes]', e => e.length), 0);
+    await p.fill('#vf [name=full_name]', 'تابع من النموذج'); await p.selectOption('#vf [name=category]', 'family_member');
+    await p.waitForSelector('#hq'); await p.fill('#hq', 'خالد بن سالم'); await p.waitForTimeout(200);
+    await p.screenshot({ path: OUT + '/17-pick-head.png' });
+    await p.click('#hl label:has-text("خالد بن سالم") input'); await p.click('.modal-f button:has-text("اختيار")');
+    await p.waitForSelector('#headbox:not([hidden])'); assert.match(await p.textContent('#headname'), /خالد بن سالم/);
+    assert.equal(await p.isHidden('#travbox'), true); await p.fill('#vf [name=relation]', 'ابن'); await p.screenshot({ path: OUT + '/18-member-form.png' });
+    await p.click('.modal-f button:has-text("حفظ")'); await p.waitForSelector('#vf', { state: 'detached' });
+    await p.fill('#f_q', 'تابع من النموذج'); await p.waitForTimeout(500); const vt = await p.textContent('#vlist'); assert.ok(/تابع لأسرة/.test(vt), 'TEXT=' + vt.replace(/\s+/g,' ').slice(0, 300)); await p.fill('#f_q', '');
+  });
+  await t('إلغاء اختيار رب الأسرة يعيد التصنيف السابق', async () => {
+    await p.click('#addv'); await p.waitForSelector('#vf'); await p.selectOption('#vf [name=category]', 'family_member'); await p.waitForSelector('#hq');
+    await p.click('.overlay:last-of-type .modal-f button:has-text("إلغاء")'); await p.waitForTimeout(200); assert.equal(await p.inputValue('#vf [name=category]'), 'individual'); await p.click('.overlay:has(#vf) .x');
+  });
+  const jp = await newPage();
+  await t('زائر الرابط: طلب انضمام ثم رفض الدخول قبل الموافقة', async () => {
+    await jp.goto(base); await jp.click('#joinbtn'); await jp.waitForSelector('#jf');
+    await jp.fill('#jf [name=name]', 'محمد المتطوع'); await jp.fill('#jf [name=phone]', '+60111222333'); await jp.fill('#jf [name=username]', 'volunteer1'); await jp.fill('#jf [name=password]', 'volpass123');
+    await jp.screenshot({ path: OUT + '/19-join-form.png' });
+    await jp.click('.modal-f button:has-text("إرسال")'); await jp.waitForSelector('text=وصل طلبك إلى المشرف'); await jp.click('.modal-f button:has-text("حسناً")');
+    await jp.fill('#u', 'volunteer1'); await jp.fill('#p', 'volpass123'); await jp.click('#lf button'); await jp.waitForSelector('#lerr:not([hidden])'); assert.match(await jp.textContent('#lerr'), /قيد المراجعة/);
+  });
+  await t('المدير يرى شارة الطلبات ويقبله كمشرف دولتين', async () => {
+    await p.evaluate(() => App.refreshPending()); await p.waitForSelector('.nav-badge:not([hidden])'); await go(p, '#/people', '[data-a]');
+    assert.match(await p.textContent('#page'), /محمد المتطوع/); await p.screenshot({ path: OUT + '/20-requests.png', fullPage: true });
+    await p.click('[data-a]'); await p.waitForSelector('#arl'); await p.selectOption('#arl', 'country_supervisor'); await p.waitForSelector('#acb:not([hidden])');
+    await p.click('#acb label:has-text("ماليزيا") input'); await p.click('#acb label:has-text("الهند") input'); await p.screenshot({ path: OUT + '/21-approve.png' });
+    await p.click('.modal-f button:has-text("قبول")'); await p.waitForSelector('#arl', { state: 'detached' });
+    const jp2 = await newPage(); await login(jp2, 'volunteer1', 'volpass123'); assert.match(await jp2.textContent('.user-chip'), /مشرف دولة/); await jp2.close();
+  });
+  await t('رفض طلب انضمام', async () => {
+    const x = await newPage(); await x.goto(base); await x.click('#joinbtn'); await x.fill('#jf [name=name]', 'شخص مرفوض'); await x.fill('#jf [name=phone]', '+60999888777'); await x.fill('#jf [name=username]', 'rejectme'); await x.fill('#jf [name=password]', 'rejpass123');
+    await x.click('.modal-f button:has-text("إرسال")'); await x.waitForSelector('text=وصل طلبك إلى المشرف');
+    await go(p, '#/people/requests', '[data-r]'); await p.click('[data-r]'); await p.click('.modal-f button:has-text("رفض")'); await p.waitForFunction(() => !document.querySelector('[data-r]'));
+    await x.close();
+  });
+
   await t('لا أخطاء في الكونسول أثناء كل ما سبق', async () => { const real = errors.filter(e => !/favicon|401|403|400|409|404/.test(e)); assert.deepEqual(real, [], JSON.stringify(real)); });
   console.log(`\n${passed} نجح، ${failed} فشل`);
   await browser.close(); server.close(); process.exit(failed ? 1 : 0);

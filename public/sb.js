@@ -59,5 +59,13 @@ const SB = (() => {
     if (j && typeof j === 'object' && j._status) throw err(j._status, j.error || 'خطأ', j);
     return j;
   }
-  return { login, logout, rpc, setPassword, configured, hasSession: () => !!sess };
+  // طلب انضمام: لا يحتاج تسجيل دخول (ينشئ حساباً معلقاً حتى يقبله المشرف)
+  async function joinRequest(p) {
+    if (!configured()) throw err(0, 'لم يتم ضبط ملف config.js بعد (رابط المشروع والمفتاح)');
+    const r = await raw('/rest/v1/rpc/join_request', { method: 'POST', headers: hdr(), body: JSON.stringify({ p_name: p.name, p_phone: p.phone, p_username: p.username, p_password: p.password }) });
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw err(400, (j && (j.message || j.msg)) || 'تعذر إرسال الطلب، حاول لاحقاً');
+    return j;
+  }
+  return { login, logout, rpc, setPassword, joinRequest, configured, hasSession: () => !!sess };
 })();
