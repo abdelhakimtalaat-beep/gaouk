@@ -1,4 +1,5 @@
 'use strict';
+const roomFeat = r => `<span class="badge ${r.has_ac ? 'ok' : 'info'}">${r.has_ac ? 'بتكييف' : 'بدون تكييف'}</span> <span class="badge ${r.has_bath ? 'ok' : 'info'}">${r.has_bath ? 'بحمام' : 'بدون حمام'}</span>`;
 // تسكين الغرف (الخريطة التفاعلية + محرر الكروكي)، السائقون والنقل، الوجبات والإعاشة
 
 /* ================= تسكين الغرف ================= */
@@ -39,7 +40,7 @@ App.view('housing', async (page, ctx) => {
         ${!rooms.length ? `<div class="empty">لا توجد غرف في هذا الدور بعد.${admin ? ' اضغط «تحرير الكروكي والغرف» ثم «+ غرفة»، أو ارفع الكروكي أولاً.' : ''}</div>` : ''}
         <div class="mapbox ${editing ? 'editing' : ''}" id="map">${data && data.floor.has_plan ? `<img class="plan" alt="" data-plan="${S.f}" src="${(App.planCache || {})[S.f + ':' + (App._planV || 0)] || ''}">` : ''}
         ${rooms.map(r => { const L = layout[r.id] || r; return `<div class="room ${r.state}" data-r="${r.id}" style="left:${L.x}%;top:${L.y}%;width:${L.w}%;height:${L.h}%" title="غرفة ${esc(r.number)} — ${STATE_AR[r.state]}"><span style="font-size:1.05em">${esc(r.number)}</span><small>${r.status === 'active' ? `${r.booked}/${r.capacity}` : 'خارج الخدمة'}</small>${editing ? '<span class="rsz" data-rsz></span>' : ''}</div>`; }).join('')}</div></div>
-      ${rooms.length ? `<div class="card" style="margin-top:14px"><h3>قائمة الغرف</h3><div class="table-wrap"><table><thead><tr><th>الغرفة</th><th>السعة</th><th>المحجوز</th><th>المتبقي</th><th>الحالة</th><th>المقيمون</th></tr></thead><tbody>${rooms.map(r => `<tr data-rr="${r.id}" style="cursor:pointer"><td><b>${esc(r.number)}</b></td><td>${r.capacity}</td><td>${r.booked}</td><td>${r.remaining}</td><td><span class="badge ${r.state}">${STATE_AR[r.state]}</span></td><td>${esc(r.occupants.map(o => o.full_name).join('، ')) || '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table></div></div>` : ''}`}`;
+      ${rooms.length ? `<div class="card" style="margin-top:14px"><h3>قائمة الغرف</h3><div class="table-wrap"><table><thead><tr><th>الغرفة</th><th>السعة</th><th>المحجوز</th><th>المتبقي</th><th>الحالة</th><th>المواصفات</th><th>المقيمون</th></tr></thead><tbody>${rooms.map(r => `<tr data-rr="${r.id}" style="cursor:pointer"><td><b>${esc(r.number)}</b></td><td>${r.capacity}</td><td>${r.booked}</td><td>${r.remaining}</td><td><span class="badge ${r.state}">${STATE_AR[r.state]}</span></td><td>${roomFeat(r)}</td><td>${esc(r.occupants.map(o => o.full_name).join('، ')) || '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table></div></div>` : ''}`}`;
     wire();
   };
   const wire = () => {
@@ -95,7 +96,7 @@ App.view('housing', async (page, ctx) => {
   }
   function roomEditor(r) {
     const body = `<form id="rf"><div class="fgrid"><div class="field"><label>رقم الغرفة *</label><input name="number" required value="${esc(r?.number)}"></div><div class="field"><label>السعة (عدد الأسرّة/الأماكن) *</label><input type="number" min="0" max="200" name="capacity" required value="${esc(r?.capacity ?? '')}"></div>
-      <div class="field"><label>الحالة</label><select name="status">${opts([['active', 'في الخدمة'], ['out_of_service', 'خارج الخدمة']], r?.status || 'active')}</select></div><div class="field full"><label>ملاحظات</label><textarea name="notes">${esc(r?.notes)}</textarea></div></div></form>`;
+      <div class="field"><label>الحالة</label><select name="status">${opts([['active', 'في الخدمة'], ['out_of_service', 'خارج الخدمة']], r?.status || 'active')}</select></div><div class="field"><label>التكييف</label><select name="has_ac">${opts([['true', 'بتكييف'], ['false', 'بدون تكييف']], String(!!r?.has_ac))}</select></div><div class="field"><label>الحمام</label><select name="has_bath">${opts([['true', 'بحمام'], ['false', 'بدون حمام']], String(!!r?.has_bath))}</select></div><div class="field full"><label>ملاحظات</label><textarea name="notes">${esc(r?.notes)}</textarea></div></div></form>`;
     modal({ title: r ? 'تعديل الغرفة ' + r.number : 'غرفة جديدة', width: 540, body, buttons: [{ label: 'حفظ', onClick: async m => {
       const f = $('#rf', m.el); if (!f.reportValidity()) return; const b = formData(f);
       if (r) { await api('PUT', '/rooms/' + r.id, { ...b, ...layout[r.id] }); } else { const sp = freeSpot(); await api('POST', '/rooms', { ...b, floor_id: S.f, ...sp }); }
@@ -110,7 +111,7 @@ App.view('housing', async (page, ctx) => {
     const body = document.createElement('div');
     const draw = () => {
       const free = room.status === 'active' ? Math.max(0, room.capacity - room.booked) : 0;
-      body.innerHTML = `<div class="fgrid" style="margin-bottom:10px"><div><b>رقم الغرفة:</b> ${esc(room.number)}</div><div><b>المبنى والدور:</b> ${esc(bld().name)} — ${esc(fl.name)}</div><div><b>السعة الإجمالية:</b> ${room.capacity}</div>
+      body.innerHTML = `<div class="fgrid" style="margin-bottom:10px"><div><b>رقم الغرفة:</b> ${esc(room.number)}</div><div><b>المبنى والدور:</b> ${esc(bld().name)} — ${esc(fl.name)}</div><div><b>السعة الإجمالية:</b> ${room.capacity}</div><div><b>المواصفات:</b> ${roomFeat(room)}</div>
         <div><b>المحجوزون (${S.date}):</b> ${room.booked}</div><div><b>المتبقي:</b> ${free}</div><div><b>الحالة:</b> <span class="badge ${room.state}">${STATE_AR[room.state]}</span></div>
         <div class="full"><b>المشرف المسؤول:</b> ${data.floor.supervisors.length ? esc(data.floor.supervisors.map(s => s.name + (s.phone ? ' (' + s.phone + ')' : '')).join('، ')) : '<span class="muted">غير محدد</span>'}</div>
         ${room.notes ? `<div class="full"><b>ملاحظات:</b> ${esc(room.notes)}</div>` : ''}</div>

@@ -61,7 +61,7 @@ const Adapter = (() => {
     const wrap = async fn => { try { return await fn(); } catch (e) { if (e instanceof ApiError) throw e; throw new ApiError(e.status ?? 0, e.data || { error: e.message }); } };
     return wrap(async () => {
       const me = async () => { const r = await rpc('GET', '/me'); return { user: r.user, roles: Compute.ROLE_LABELS }; };
-      if (path === '/login') { await SB.login(body.username, body.password); return me(); }
+      if (path === '/login') { await SB.loginPassword(body.username, body.password); return me(); }
       if (path === '/join-request') return SB.joinRequest(body);
       if (path === '/activate') { await SB.activate(body); return me(); }
       if (path === '/issue-code') return SB.call('admin_issue_code', { p_user_id: body.user_id });

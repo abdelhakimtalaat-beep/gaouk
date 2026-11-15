@@ -4,7 +4,8 @@ const SB = (() => {
   const cfg = () => window.GAOUK_CONFIG || {};
   const KEY = 'gaouk_session';
   const store = (() => { try { localStorage.setItem('__t', '1'); localStorage.removeItem('__t'); return localStorage; } catch (_) { const m = {}; return { getItem: k => m[k] ?? null, setItem: (k, v) => (m[k] = v), removeItem: k => delete m[k] }; } })();
-  const DEV = 'gaouk_device';
+  const DEV = 'gaouk_device', MODE = 'gaouk_mode';   // MODE=pw: جلسة المشرف بكلمة المرور على جهاز مربوط (لا تُستبدل بحساب الجهاز تلقائياً)
+  const pw = () => store.getItem(MODE) === 'pw';
   const dev = () => { try { return JSON.parse(store.getItem(DEV) || 'null'); } catch (_) { return null; } };
   let sess = null; try { sess = JSON.parse(store.getItem(KEY) || 'null'); } catch (_) {}
   const save = s => { sess = s; if (s) store.setItem(KEY, JSON.stringify(s)); else store.removeItem(KEY); };
@@ -32,7 +33,7 @@ const SB = (() => {
     setSession(j);
   }
   // الجهاز المربوط يدخل تلقائياً بمفتاحه السري المحفوظ (لا كلمة مرور)
-  async function relogin() { const d = dev(); if (!d) return false; try { await login(d.u, d.s); return true; } catch (e) { if (e.status === 401) store.removeItem(DEV); return false; } }
+  async function relogin() { const d = dev(); if (!d || pw()) return false; try { await login(d.u, d.s); return true; } catch (e) { if (e.status === 401) store.removeItem(DEV); return false; } }
   async function token() {
     if (!sess && !(await relogin())) throw err(401, 'يجب تسجيل الدخول');
     if (sess.expires_at - Date.now() < 60000) { try { await refresh(); } catch (e) { if (!(await relogin())) throw e; } }
@@ -40,8 +41,11 @@ const SB = (() => {
   }
   async function logout() {
     try { if (sess) await raw('/auth/v1/logout', { method: 'POST', headers: hdr({ Authorization: 'Bearer ' + sess.access_token }) }); } catch (_) {}
-    save(null); store.removeItem(DEV);
+    const keep = pw(); save(null); store.removeItem(MODE); if (!keep) store.removeItem(DEV);   // خروج المشرف لا يفك ربط جهاز المستخدم
   }
+  async function loginPassword(u, p) { await login(u, p); store.setItem(MODE, 'pw'); }
+  async function useDevice() { store.removeItem(MODE); save(null); return relogin(); }
+  async function switchToPassword() { try { if (sess) await raw('/auth/v1/logout', { method: 'POST', headers: hdr({ Authorization: 'Bearer ' + sess.access_token }) }); } catch (_) {} save(null); store.setItem(MODE, 'pw'); }
   async function setPassword(pw) {
     const r = await raw('/auth/v1/user', { method: 'PUT', headers: hdr({ Authorization: 'Bearer ' + (await token()) }), body: JSON.stringify({ password: pw }) });
     const j = await r.json().catch(() => ({}));
@@ -96,5 +100,5 @@ const SB = (() => {
     if (!r.ok) { const m = (j && (j.message || j.msg)) || 'خطأ في الخادم'; throw err(j && j.code === 'PT403' ? 403 : 400, m); }
     return j;
   }
-  return { login, logout, rpc, setPassword, joinRequest, activate, call, hasDevice: () => !!dev(), configured, hasSession: () => !!sess };
+  return { login, loginPassword, useDevice, switchToPassword, pwMode: pw, logout, rpc, setPassword, joinRequest, activate, call, hasDevice: () => !!dev(), configured, hasSession: () => !!sess };
 })();

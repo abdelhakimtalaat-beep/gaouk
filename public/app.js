@@ -117,8 +117,8 @@ App.showLogin = function (msg) {
   $('#root').innerHTML = `<div class="login-wrap"><div class="login-card">
     <div class="brand"><h1>جاؤوك</h1></div>
     ${msg ? `<div class="alert warn">${esc(msg)}</div>` : ''}
-    <div id="newbox" class="tc"><p class="muted" style="margin-top:0">للدخول أرسل طلب انضمام باسمك ورقم هاتفك. وبمجرد موافقة المشرف يعمل التطبيق على هذا الجهاز تلقائياً.</p>
-      <button type="button" class="btn dark" id="joinbtn" style="width:100%;justify-content:center;padding:11px">طلب انضمام</button></div>
+    <div id="newbox" class="tc"><p class="muted" style="margin-top:0">${SB.hasDevice() ? 'هذا الجهاز مربوط بحساب. ادخل إلى حسابك، أو سجّل دخول المشرف بكلمة المرور من الأسفل.' : 'للدخول أرسل طلب انضمام باسمك ورقم هاتفك. وبمجرد موافقة المشرف يعمل التطبيق على هذا الجهاز تلقائياً.'}</p>
+      ${SB.hasDevice() ? '<button type="button" class="btn dark" id="mydev" style="width:100%;justify-content:center;padding:11px">الدخول إلى حسابي على هذا الجهاز</button>' : '<button type="button" class="btn dark" id="joinbtn" style="width:100%;justify-content:center;padding:11px">طلب انضمام</button>'}</div>
     <form id="lf" autocomplete="on" hidden>
       <p class="muted small tc" style="margin-top:0">دخول المشرف العام بكلمة المرور</p>
       <div class="field"><label for="u">اسم المستخدم</label><input id="u" name="username" type="text" autocomplete="username" required dir="ltr" style="text-align:right"></div>
@@ -127,7 +127,8 @@ App.showLogin = function (msg) {
       <button class="btn dark" style="width:100%;justify-content:center;padding:11px">تسجيل الدخول</button></form>
     <div class="tc" style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--sand-d)">
       <button type="button" class="btn ghost sm" id="toadmin">دخول المشرف العام بكلمة المرور</button></div></div></div>`;
-  $('#joinbtn').onclick = App.joinDialog;
+  if ($('#joinbtn')) $('#joinbtn').onclick = App.joinDialog;
+  if ($('#mydev')) $('#mydev').onclick = async () => { if (await SB.useDevice()) App.start(); else toast('تعذر الدخول من هذا الجهاز. تواصل مع المشرف', 'err'); };
   const mode = m => { $('#newbox').hidden = m !== 'new'; $('#lf').hidden = m !== 'admin'; $('#toadmin').textContent = m === 'admin' ? 'العودة إلى طلب الانضمام' : 'دخول المشرف العام بكلمة المرور'; };
   $('#toadmin').onclick = () => mode($('#lf').hidden ? 'admin' : 'new');
   $('#lf').onsubmit = async e => {
@@ -217,9 +218,9 @@ App.refreshPending = async function () {
 // ---------- الإقلاع والهيكل ----------
 App.start = async function () {
   const had = SB.hasDevice();
-  if (Bio.enabled() && SB.hasDevice()) await Bio.gate();
+  if (Bio.enabled() && SB.hasDevice() && !SB.pwMode()) await Bio.gate();
   try { const r = await api('GET', '/me'); App.user = r.user; App.roleLabels = r.roles; await App.boot(); }
-  catch (e) { if (SB.hasDevice() && /قيد المراجعة/.test(e.message || '')) return App.showPending(); App.showLogin(had && !SB.hasDevice() ? 'أُلغي ربط هذا الجهاز أو انتهت صلاحيته. تواصل مع المشرف' : undefined); }
+  catch (e) { if (SB.hasDevice() && !SB.pwMode() && /قيد المراجعة/.test(e.message || '')) return App.showPending(); App.showLogin(had && !SB.hasDevice() ? 'أُلغي ربط هذا الجهاز أو انتهت صلاحيته. تواصل مع المشرف' : undefined); }
 };
 App.boot = async function () {
   const [ev, co, me] = await Promise.all([api('GET', '/events'), api('GET', '/countries'), api('GET', '/me')]);
@@ -241,12 +242,14 @@ App.buildShell = function () {
     <div class="main"><header class="top"><button class="btn sec menu-btn" id="mb" aria-label="القائمة">☰</button>
       <div class="row"><span class="muted small">المناسبة:</span><select id="evsel" aria-label="المناسبة الحالية"></select></div><div class="grow"></div>
       <div class="user-chip"><span class="av">${esc(u.name.slice(0, 1))}</span><div><div style="font-weight:700;line-height:1.1">${esc(u.name)}</div><div class="muted small">${esc(App.roleLabels[u.role])}${u.role === 'country_supervisor' ? ' — ' + esc(App.countries.map(c => c.name).join('، ')) : ''}</div></div></div>
-      ${SB.hasDevice() ? '' : '<button class="btn sec sm" id="lo">خروج</button>'}</header><main class="page" id="page"></main></div></div>`;
+      ${SB.hasDevice() && !SB.pwMode() ? '<button class="btn sec sm" id="sw">دخول كمشرف</button>' : (SB.hasDevice() ? '<button class="btn sec sm" id="back">حسابي على هذا الجهاز</button> ' : '') + '<button class="btn sec sm" id="lo">خروج</button>'}</header><main class="page" id="page"></main></div></div>`;
   App.fillEventSelect();
   $('#evsel').onchange = e => { App.eventId = parseInt(e.target.value, 10) || null; localStorage.setItem('gaouk_event', App.eventId || ''); App.route(); };
   if ($('#lo')) $('#lo').onclick = async () => {
-    try { await api('POST', '/logout', {}); } catch (_) {} Bio.disable(); App.user = null; App.showLogin();
+    try { await api('POST', '/logout', {}); } catch (_) {} if (!SB.hasDevice()) Bio.disable(); App.user = null; App.showLogin();
   };
+  if ($('#sw')) $('#sw').onclick = async () => { await SB.switchToPassword(); App.user = null; App.showLogin(); $('#toadmin').click(); };
+  if ($('#back')) $('#back').onclick = async () => { await SB.logout(); if (await SB.useDevice()) { App.user = null; App.start(); } else App.showLogin(); };
   $('#mb').onclick = () => $('#side').classList.toggle('open');
   $('#nav').onclick = () => $('#side').classList.remove('open');
 };
