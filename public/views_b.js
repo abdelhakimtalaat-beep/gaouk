@@ -20,16 +20,34 @@ App.view('housing', async (page, ctx) => {
   if (!bld().floors.find(f => f.id === S.f)) S.f = bld().floors[0]?.id;
   let data = null;
 
+  // إحصائية مجملة لكل مبنى (كل أدواره) في التاريخ المعروض
+  let stats = null;
+  const statsHtml = () => !stats ? '<div class="muted small">جارٍ حساب إحصائية المباني…</div>' : `<h3 style="margin-top:0">إحصائية المباني — ${S.date}</h3><div class="table-wrap"><table class="bstats"><thead><tr><th>المبنى</th><th>السعة الإجمالية</th><th>المحجوز</th><th>المتبقي</th></tr></thead><tbody>${stats.map(s => `<tr><td><b>${esc(s.name)}</b></td><td>${s.cap}</td><td>${s.booked}</td><td><b>${s.cap - s.booked}</b></td></tr>`).join('')}${stats.length > 1 ? `<tr class="tot"><td>الإجمالي</td><td>${stats.reduce((a, s) => a + s.cap, 0)}</td><td>${stats.reduce((a, s) => a + s.booked, 0)}</td><td>${stats.reduce((a, s) => a + s.cap - s.booked, 0)}</td></tr>` : ''}</tbody></table></div>`;
+  const loadStats = async () => {
+    const date = S.date, key = structure.map(b => b.id + ':' + b.floors.length).join(','); const mine = ++loadStats.n;
+    try {
+      const res = await Promise.all(structure.map(async b => { let cap = 0, booked = 0; for (const f of b.floors) { const d = await api('GET', `/occupancy?floor_id=${f.id}&date=${date}`); for (const r of d.rooms) if (r.status === 'active') { cap += r.capacity; booked += r.booked; } } return { name: b.name, cap, booked }; }));
+      if (mine !== loadStats.n || ctx.stale()) return; stats = res; const el = $('#bstats'); if (el) el.innerHTML = statsHtml();
+    } catch (_) {}
+  };
+  loadStats.n = 0;
   const load = async () => {
     if (!S.f) { data = null; return render(); }
     data = await api('GET', `/occupancy?floor_id=${S.f}&date=${S.date}`); if (ctx.stale()) return;
-    layout = {}; data.rooms.forEach(r => (layout[r.id] = { x: r.x, y: r.y, w: r.w, h: r.h })); dirty = false; render();
+    layout = {}; data.rooms.forEach(r => (layout[r.id] = { x: r.x, y: r.y, w: r.w, h: r.h })); dirty = false; render(); loadStats();
   };
   const render = () => {
     const b = bld(); const fl = b.floors.find(f => f.id === S.f);
     const rooms = data ? data.rooms : [];
     const cap = rooms.filter(r => r.status === 'active').reduce((a, r) => a + r.capacity, 0), booked = rooms.filter(r => r.status === 'active').reduce((a, r) => a + r.booked, 0);
+    const grouped = !editing && rooms.some(r => r.place);   // تجميع الغرف حسب «المكان» في عرض الكروكي
+    const tile = (r, st) => `<div class="room ${r.state}" data-r="${r.id}" style="${st}" title="غرفة ${esc(r.number)} — ${STATE_AR[r.state]}${r.occupants.length ? '\n' + esc(r.occupants.map(o => o.full_name).join('، ')) : ''}"><span style="font-size:1.05em">${esc(r.number)}</span><small>${r.status === 'active' ? `${r.booked}/${r.capacity}` : 'خارج الخدمة'}</small>${bedsRow(r)}${editing ? '<span class="rsz" data-rsz></span>' : ''}</div>`;
+    const groupsHtml = rs => { const m = new Map(); for (const r of rs) { const k = (r.place || '').trim(); if (!m.has(k)) m.set(k, []); m.get(k).push(r); }
+      const keys = [...m.keys()].sort((a, b) => (a === '') - (b === '') || a.localeCompare(b, 'ar'));
+      return keys.map(k => { const g = m.get(k), cp = g.filter(r => r.status === 'active').reduce((a, r) => a + r.capacity, 0), bk = g.filter(r => r.status === 'active').reduce((a, r) => a + r.booked, 0);
+        return `<div class="pgroup"><div class="pname"><b>${esc(k || 'بدون مكان')}</b><small>${bk}/${cp}</small></div><div class="prooms">${g.map(r => tile(r, '')).join('')}</div></div>`; }).join(''); };
     page.innerHTML = `<div class="page-head"><h1>تسكين الغرف</h1><div class="grow"></div>${admin ? '<button class="btn sec" id="mgb">إدارة المباني والأدوار</button>' : ''}</div>
+      <div class="card" id="bstats" style="margin-bottom:14px">${statsHtml()}</div>
       <div class="card" style="margin-bottom:14px"><div class="map-toolbar"><div class="row"><label style="margin:0">المبنى</label><select id="sb" style="width:auto">${opts(structure.map(x => [x.id, x.name]), S.b)}</select></div>
       <div class="tabs" style="margin:0;border:0" id="floors">${b.floors.map(f => `<button data-f="${f.id}" class="${f.id === S.f ? 'on' : ''}">${esc(f.name)}</button>`).join('')}</div><div class="grow"></div>
       <div class="row"><label style="margin:0">التاريخ</label><input type="date" id="sd" value="${S.date}" style="width:auto"><span class="muted small">${dayName(S.date)}</span></div></div>
@@ -41,9 +59,9 @@ App.view('housing', async (page, ctx) => {
         ${admin ? (editing ? `<button class="btn sm sec" id="e_add">+ غرفة</button><button class="btn sm sec" id="e_up">رفع الكروكي</button>${fl.has_plan ? '<button class="btn sm sec" id="e_rmplan">إزالة الكروكي</button>' : ''}<button class="btn sm sec" id="e_auto">ترتيب تلقائي</button><button class="btn sm" id="e_save" ${dirty ? '' : 'disabled'}>حفظ المواضع</button><button class="btn sm dark" id="e_end">إنهاء التحرير</button>` : '<button class="btn sm sec" id="e_start">تحرير الكروكي والغرف</button>') : ''}</div>
         ${editing ? '<div class="alert info">وضع التحرير: اسحب الغرفة لتحريكها، واسحب المربع الأبيض في ركنها لتغيير حجمها، وانقر عليها لتعديل رقمها وسعتها. ارفع صورة الكروكي لتظهر كخلفية ترسم فوقها الغرف بنفس توزيعها الحقيقي.</div>' : ''}
         ${!rooms.length ? `<div class="empty">لا توجد غرف في هذا الدور بعد.${admin ? ' اضغط «تحرير الكروكي والغرف» ثم «+ غرفة»، أو ارفع الكروكي أولاً.' : ''}</div>` : ''}
-        <div class="mapbox ${editing ? 'editing' : ''}" id="map">${data && data.floor.has_plan ? `<img class="plan" alt="" data-plan="${S.f}" src="${(App.planCache || {})[S.f + ':' + (App._planV || 0)] || ''}">` : ''}
-        ${rooms.map(r => { const L = layout[r.id] || r; return `<div class="room ${r.state}" data-r="${r.id}" style="left:${L.x}%;top:${L.y}%;width:${L.w}%;height:${L.h}%" title="غرفة ${esc(r.number)} — ${STATE_AR[r.state]}${r.occupants.length ? '\n' + esc(r.occupants.map(o => o.full_name).join('، ')) : ''}"><span style="font-size:1.05em">${esc(r.number)}</span><small>${r.status === 'active' ? `${r.booked}/${r.capacity}` : 'خارج الخدمة'}</small>${bedsRow(r)}${editing ? '<span class="rsz" data-rsz></span>' : ''}</div>`; }).join('')}</div></div>
-      ${rooms.length ? `<div class="card" style="margin-top:14px"><h3>قائمة الغرف</h3><div class="table-wrap"><table><thead><tr><th>الغرفة</th><th>السعة</th><th>المحجوز</th><th>المتبقي</th><th>الحالة</th><th>المواصفات</th><th>المقيمون</th></tr></thead><tbody>${rooms.map(r => `<tr data-rr="${r.id}" style="cursor:pointer"><td><b>${esc(r.number)}</b></td><td>${r.capacity}</td><td>${r.booked}</td><td>${r.remaining}</td><td><span class="badge ${r.state}">${STATE_AR[r.state]}</span></td><td>${roomFeat(r)}</td><td>${esc(r.occupants.map(o => o.full_name).join('، ')) || '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table></div></div>` : ''}`}`;
+        <div class="mapbox ${editing ? 'editing' : ''} ${grouped ? 'grouped' : ''}" id="map">${data && data.floor.has_plan && !grouped ? `<img class="plan" alt="" data-plan="${S.f}" src="${(App.planCache || {})[S.f + ':' + (App._planV || 0)] || ''}">` : ''}
+        ${grouped ? groupsHtml(rooms) : rooms.map(r => tile(r, (() => { const L = layout[r.id] || r; return `left:${L.x}%;top:${L.y}%;width:${L.w}%;height:${L.h}%`; })())).join('')}</div></div>
+      ${rooms.length ? `<div class="card" style="margin-top:14px"><h3>قائمة الغرف</h3><div class="table-wrap"><table><thead><tr><th>الغرفة</th><th>المكان</th><th>السعة</th><th>المحجوز</th><th>المتبقي</th><th>الحالة</th><th>المواصفات</th><th>المقيمون</th></tr></thead><tbody>${rooms.map(r => `<tr data-rr="${r.id}" style="cursor:pointer"><td><b>${esc(r.number)}</b></td><td>${esc(r.place || '—')}</td><td>${r.capacity}</td><td>${r.booked}</td><td>${r.remaining}</td><td><span class="badge ${r.state}">${STATE_AR[r.state]}</span></td><td>${roomFeat(r)}</td><td>${esc(r.occupants.map(o => o.full_name).join('، ')) || '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table></div></div>` : ''}`}`;
     wire();
   };
   const wire = () => {
@@ -99,7 +117,7 @@ App.view('housing', async (page, ctx) => {
   }
   function roomEditor(r) {
     const body = `<form id="rf"><div class="fgrid"><div class="field"><label>رقم الغرفة *</label><input name="number" required value="${esc(r?.number)}"></div><div class="field"><label>السعة (عدد الأسرّة/الأماكن) *</label><input type="number" min="0" max="200" name="capacity" required value="${esc(r?.capacity ?? '')}"></div>
-      <div class="field"><label>الحالة</label><select name="status">${opts([['active', 'في الخدمة'], ['out_of_service', 'خارج الخدمة']], r?.status || 'active')}</select></div><div class="field"><label>التكييف</label><select name="has_ac">${opts([['true', 'بتكييف'], ['false', 'بدون تكييف']], String(!!r?.has_ac))}</select></div><div class="field"><label>الحمام</label><select name="bath_count">${opts([['1', 'حمام واحد'], ['2', '2 حمام'], ['0', 'بدون حمام']], String(r?.bath_count ?? 0))}</select></div><div class="field full"><label>ملاحظات</label><textarea name="notes">${esc(r?.notes)}</textarea></div></div></form>`;
+      <div class="field"><label>المكان</label><input name="place" list="plc" maxlength="80" placeholder="مثال: الجناح الشرقي" value="${esc(r?.place || '')}"><datalist id="plc">${[...new Set((data?.rooms || []).map(x => x.place).filter(Boolean))].map(x => `<option value="${esc(x)}">`).join('')}</datalist></div><div class="field"><label>الحالة</label><select name="status">${opts([['active', 'في الخدمة'], ['out_of_service', 'خارج الخدمة']], r?.status || 'active')}</select></div><div class="field"><label>التكييف</label><select name="has_ac">${opts([['true', 'بتكييف'], ['false', 'بدون تكييف']], String(!!r?.has_ac))}</select></div><div class="field"><label>الحمام</label><select name="bath_count">${opts([['1', 'حمام واحد'], ['2', '2 حمام'], ['0', 'بدون حمام']], String(r?.bath_count ?? 0))}</select></div><div class="field full"><label>ملاحظات</label><textarea name="notes">${esc(r?.notes)}</textarea></div></div></form>`;
     modal({ title: r ? 'تعديل الغرفة ' + r.number : 'غرفة جديدة', width: 540, body, buttons: [{ label: 'حفظ', onClick: async m => {
       const f = $('#rf', m.el); if (!f.reportValidity()) return; const b = formData(f);
       if (r) { await api('PUT', '/rooms/' + r.id, { ...b, ...layout[r.id] }); } else { const sp = freeSpot(); await api('POST', '/rooms', { ...b, floor_id: S.f, ...sp }); }
