@@ -67,17 +67,20 @@ const SB = (() => {
     return j;
   }
   // طلب انضمام: لا يحتاج تسجيل دخول (ينشئ حساباً معلقاً حتى يقبله المشرف)
+  const newSecret = () => Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
   async function joinRequest(p) {
     if (!configured()) throw err(0, 'لم يتم ضبط ملف config.js بعد (رابط المشروع والمفتاح)');
-    const r = await raw('/rest/v1/rpc/join_request', { method: 'POST', headers: hdr(), body: JSON.stringify({ p_name: p.name, p_phone: p.phone }) });
+    const secret = newSecret();
+    const r = await raw('/rest/v1/rpc/join_request', { method: 'POST', headers: hdr(), body: JSON.stringify({ p_name: p.name, p_phone: p.phone, p_secret: secret }) });
     const j = await r.json().catch(() => null);
     if (!r.ok) throw err(400, (j && (j.message || j.msg)) || 'تعذر إرسال الطلب، حاول لاحقاً');
+    store.setItem(DEV, JSON.stringify({ u: j.username, s: secret }));   // الجهاز الذي أرسل الطلب هو الجهاز المربوط
     return j;
   }
   // تفعيل الجهاز برمز المشرف: يولّد المتصفح مفتاحاً سرياً عشوائياً يصبح كلمة مرور الحساب، وبذلك لا يعمل الحساب إلا على هذا الجهاز
   async function activate(p) {
     if (!configured()) throw err(0, 'لم يتم ضبط ملف config.js بعد (رابط المشروع والمفتاح)');
-    const secret = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
+    const secret = newSecret();
     const r = await raw('/rest/v1/rpc/activate_device', { method: 'POST', headers: hdr(), body: JSON.stringify({ p_name: p.name, p_phone: p.phone, p_code: p.code, p_secret: secret }) });
     const j = await r.json().catch(() => null);
     if (!r.ok) throw err(400, (j && (j.message || j.msg)) || 'تعذر التفعيل، حاول لاحقاً');

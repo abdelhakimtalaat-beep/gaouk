@@ -62,7 +62,8 @@ App.view('people', async (page, ctx) => {
       if (role === 'country_supervisor') { const ids = $$('input[name="cids[]"]:checked', f).map(x => +x.value); if (!ids.length) return toast('اختر دولة واحدة على الأقل', 'warn'); b.country_id = ids[0]; b.extra_country_ids = ids.slice(1); }
       if (role === 'building_supervisor') { const fl = $$('input[name="bids[]"]:checked', f).flatMap(x => x.dataset.f.split(',').filter(Boolean).map(Number)); if (!fl.length) return toast('اختر مبنى واحداً على الأقل (له أدوار)', 'warn'); b.floor_ids = fl; }
       await api('PUT', '/users/' + u.id, b); mm.close(); App.refresh();
-      showCode(u, await api('POST', '/issue-code', { user_id: u.id }));
+      if (u.device === 'bound') toast('تم القبول. سيعمل التطبيق تلقائياً على جهاز ' + u.name + ' دون رمز', 'ok');
+      else showCode(u, await api('POST', '/issue-code', { user_id: u.id }));   // طلب قديم بلا جهاز مربوط
     } }, { label: 'إلغاء', cls: 'sec', close: true }] });
     $('#arl', m.el).onchange = e => { $('#acb', m.el).hidden = e.target.value !== 'country_supervisor'; $('#abb', m.el).hidden = e.target.value !== 'building_supervisor'; };
   };

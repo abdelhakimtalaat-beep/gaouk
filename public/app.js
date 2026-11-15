@@ -118,7 +118,7 @@ App.showLogin = function (msg) {
     <div class="brand"><img class="logo-img" src="logo.png" alt="شعار جاؤوك"><h1>جاؤوك</h1></div>
     ${msg ? `<div class="alert warn">${esc(msg)}</div>` : ''}
     <form id="af" autocomplete="off">
-      <p class="muted small tc" style="margin-top:0">أدخل اسمك ورقم هاتفك ورمز التفعيل الذي أرسله لك المشرف. يرتبط حسابك بهذا الجهاز، وبعدها تدخل تلقائياً دون كلمة مرور.</p>
+      <p class="muted small tc" style="margin-top:0">جديد هنا؟ اضغط «طلب انضمام» بالأسفل. وإن كان لديك رمز تفعيل من المشرف (لجهاز جديد) فأدخل اسمك وهاتفك والرمز.</p>
       <div class="field"><label for="an">الاسم</label><input id="an" name="name" required autocomplete="name"></div>
       <div class="field"><label for="ap">رقم الهاتف (مع مفتاح الدولة)</label><input id="ap" name="phone" type="tel" required dir="ltr" style="text-align:right" placeholder="+966500000000" autocomplete="tel"></div>
       <div class="field"><label for="ac">رمز التفعيل</label><input id="ac" name="code" required dir="ltr" maxlength="12" autocapitalize="characters" style="text-align:center;letter-spacing:4px;text-transform:uppercase;font-weight:700" autocomplete="off"></div>
@@ -185,14 +185,32 @@ App.offerBio = async function () {
 
 // طلب الانضمام: يرسل الاسم والهاتف وبيانات الدخول، ولا يعمل الحساب حتى يقبله المشرف ويحدد صلاحياته
 App.joinDialog = function () {
-  const body = `<form id="jf" autocomplete="off"><p class="muted" style="margin-top:0">اكتب اسمك ورقم هاتفك فقط. سيصل طلبك إلى المشرف، وبعد موافقته يرسل لك كلمة المرور لتدخل برقم هاتفك.</p>
+  const body = `<form id="jf" autocomplete="off"><p class="muted" style="margin-top:0">اكتب اسمك ورقم هاتفك فقط. سيصل طلبك إلى المشرف، وبمجرد موافقته يعمل التطبيق على هذا الجهاز تلقائياً دون رمز أو كلمة مرور.</p>
     <div class="field"><label>الاسم *</label><input name="name" required></div>
     <div class="field"><label>رقم الهاتف (مع مفتاح الدولة) *</label><input name="phone" type="tel" required dir="ltr" style="text-align:right" placeholder="+966500000000"></div></form>`;
   modal({ title: 'طلب انضمام', width: 460, body, buttons: [{ label: 'إرسال الطلب', onClick: async m => {
     const f = $('#jf', m.el); if (!f.reportValidity()) return;
-    await api('POST', '/join-request', formData(f)); m.close();
-    modal({ title: 'تم إرسال طلبك', width: 440, body: '<div class="alert info" style="margin:0">وصل طلبك إلى المشرف. بعد الموافقة يرسل لك كلمة المرور، وتدخل باستخدام <b>رقم هاتفك</b> وكلمة المرور.</div>', buttons: [{ label: 'حسناً', close: true }] });
+    await api('POST', '/join-request', formData(f)); m.close(); App.showPending();
   } }, { label: 'إلغاء', cls: 'sec', close: true }] });
+};
+
+// شاشة الانتظار: الجهاز مربوط من لحظة إرسال الطلب، وتفتح الصفحة تلقائياً عند قبول المشرف
+App.showPending = function () {
+  document.body.classList.remove('printing-modal');
+  $('#root').innerHTML = `<div class="login-wrap"><div class="login-card tc" id="pw">
+    <div class="brand"><img class="logo-img" src="logo.png" alt="شعار جاؤوك"><h1>جاؤوك</h1></div>
+    <div class="alert info"><b>وصل طلبك إلى المشرف</b><br>بمجرد موافقته يُفتح التطبيق هنا تلقائياً على هذا الجهاز. اترك هذه الصفحة مفتوحة أو عد إليها لاحقاً.</div>
+    <p class="muted small">الحساب مرتبط بهذا الجهاز فقط.</p>
+    <button type="button" class="btn ghost sm" id="pcancel">إلغاء الطلب والعودة</button></div></div>`;
+  let busy = false;
+  const timer = setInterval(async () => {
+    if (!$('#pw')) return clearInterval(timer);
+    if (busy) return; busy = true;
+    try { const r = await api('GET', '/me'); clearInterval(timer); App.user = r.user; await App.boot(); App.offerBio(); }
+    catch (e) { if (!SB.hasDevice()) { clearInterval(timer); App.showLogin('لم يُقبل طلبك أو أُلغي. يمكنك إرسال طلب جديد'); } }
+    busy = false;
+  }, 4000);
+  $('#pcancel').onclick = async () => { clearInterval(timer); await SB.logout(); App.showLogin(); };
 };
 
 // عدّاد طلبات الانضمام المعلقة (للمدير فقط) بجانب «المستخدمون والمشرفون»
@@ -211,7 +229,7 @@ App.start = async function () {
   const had = SB.hasDevice();
   if (Bio.enabled() && SB.hasDevice()) await Bio.gate();
   try { const r = await api('GET', '/me'); App.user = r.user; App.roleLabels = r.roles; await App.boot(); }
-  catch (e) { App.showLogin(had && !SB.hasDevice() ? 'أُلغي ربط هذا الجهاز أو انتهت صلاحيته. اطلب رمز تفعيل جديداً من المشرف' : undefined); }
+  catch (e) { if (SB.hasDevice() && /قيد المراجعة/.test(e.message || '')) return App.showPending(); App.showLogin(had && !SB.hasDevice() ? 'أُلغي ربط هذا الجهاز أو انتهت صلاحيته. اطلب رمز تفعيل جديداً من المشرف' : undefined); }
 };
 App.boot = async function () {
   const [ev, co, me] = await Promise.all([api('GET', '/events'), api('GET', '/countries'), api('GET', '/me')]);
