@@ -101,12 +101,13 @@ App.nav = [
   ['dashboard', 'لوحة التحكم', 'home', null],
   ['events', 'المناسبات', 'cal', ['admin', 'event_manager']],
   ['visitors', 'الزائرون', 'users', ['admin', 'event_manager', 'country_supervisor', 'transport', 'catering', 'building_supervisor']],
+  ['persons', 'قاعدة البيانات', 'db', ['admin', 'event_manager', 'country_supervisor']],
   ['housing', 'تسكين الغرف', 'bed', ['admin', 'event_manager', 'building_supervisor']],
   ['drivers', 'السائقون والسيارات', 'car', ['admin', 'event_manager', 'transport']],
   ['meals', 'الوجبات والإعاشة', 'meal', ['admin', 'event_manager', 'catering']],
   ['reports', 'التقارير والطباعة', 'chart', null],
-  ['people', 'المستخدمون والمشرفون', 'shield', ['admin']],
   ['countries', 'الدول والجنسيات', 'globe', ['admin']],
+  ['people', 'المستخدمون والمشرفون', 'shield', ['admin']],
   ['audit', 'سجل العمليات', 'log', ['admin']],
   ['system', 'النسخ الاحتياطي', 'db', ['admin']],
   ['account', 'حسابي', 'key', null],
@@ -242,11 +243,11 @@ App.buildShell = function () {
     <nav id="nav">${App.visibleNav().map(n => `<a data-id="${n[0]}" href="#/${n[0]}">${icon(n[2])}<span>${n[1]}</span></a>`).join('')}</nav>
     <div class="foot">${esc(App.roleLabels[u.role])}</div></aside>
     <div class="main"><header class="top"><button class="btn sec menu-btn" id="mb" aria-label="القائمة">☰</button>
-      <div class="row"><span class="muted small">المناسبة:</span><select id="evsel" aria-label="المناسبة الحالية"></select></div><div class="grow"></div>
+      <div class="row"><span class="curev" id="curev"></span><select id="evsel" aria-label="المناسبة الحالية"></select></div><div class="grow"></div>
       <div class="user-chip"><span class="av">${esc(u.name.slice(0, 1))}</span><div><div style="font-weight:700;line-height:1.1">${esc(u.name)}</div><div class="muted small">${esc(App.roleLabels[u.role])}${u.role === 'country_supervisor' ? ' — ' + esc(App.countries.map(c => c.name).join('، ')) : ''}</div></div></div>
       ${SB.hasDevice() && !SB.pwMode() ? '<button class="btn sec sm" id="sw">دخول كمشرف</button>' : (SB.hasDevice() ? '<button class="btn sec sm" id="back">حسابي على هذا الجهاز</button> ' : '') + '<button class="btn sec sm" id="lo">خروج</button>'}</header><main class="page" id="page"></main></div></div>`;
   App.fillEventSelect();
-  $('#evsel').onchange = e => { App.eventId = parseInt(e.target.value, 10) || null; localStorage.setItem('gaouk_event', App.eventId || ''); App.route(); };
+  $('#evsel').onchange = e => { App.eventId = parseInt(e.target.value, 10) || null; localStorage.setItem('gaouk_event', App.eventId || ''); App.fillEventSelect(); App.route(); };
   if ($('#lo')) $('#lo').onclick = async () => {
     try { await api('POST', '/logout', {}); } catch (_) {} if (!SB.hasDevice()) Bio.disable(); App.user = null; App.showLogin();
   };
@@ -257,6 +258,8 @@ App.buildShell = function () {
 };
 App.fillEventSelect = function () {
   const s = $('#evsel'); if (!s) return;
+  const ce = App.events.find(e => e.id === App.eventId); const cb = $('#curev');
+  if (cb) cb.innerHTML = ce ? `<span class="muted small">المناسبة الحالية</span> <b>${esc(ce.name)}</b> <span class="small">${esc(ce.start_date)} ← ${esc(ce.end_date)}</span>` : '<span class="muted small">لا توجد مناسبة حالية</span>';
   s.innerHTML = App.events.length ? App.events.map(e => `<option value="${e.id}"${e.id === App.eventId ? ' selected' : ''}>${esc(e.name)} (${e.start_date} ← ${e.end_date})</option>`).join('') : '<option value="">لا توجد مناسبات</option>';
 };
 App.reloadEvents = async function () { App.events = (await api('GET', '/events')).events; if (!App.events.find(e => e.id === App.eventId)) App.eventId = App.pickDefaultEvent(); App.fillEventSelect(); };

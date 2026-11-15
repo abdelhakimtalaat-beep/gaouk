@@ -52,7 +52,7 @@ App.view('events', async page => {
   page.innerHTML = `<div class="page-head"><h1>المناسبات</h1><div class="grow"></div><button class="btn" id="add">+ مناسبة جديدة</button></div>
     <div class="table-wrap"><table><thead><tr><th>المناسبة</th><th>من</th><th>إلى</th><th>المتوقع</th><th>الوصف</th><th></th></tr></thead><tbody>
     ${App.events.map(e => `<tr><td><b>${esc(e.name)}</b> ${e.id === App.eventId ? '<span class="badge ok">الحالية</span>' : ''}</td><td>${fmtDate(e.start_date)}</td><td>${fmtDate(e.end_date)}</td><td>${e.expected_visitors || '—'}</td><td>${esc(e.description)}</td>
-    <td class="actions"><button class="btn sm sec" data-sw="${e.id}">فتح</button> <button class="btn sm sec" data-ed="${e.id}">تعديل</button> ${can('admin') ? `<button class="btn sm danger" data-del="${e.id}">حذف</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">لا توجد مناسبات. أنشئ أول مناسبة.</td></tr>'}</tbody></table></div>
+    <td class="actions">${e.id === App.eventId ? '' : `<button class="btn sm" data-sw="${e.id}">جعلها الحالية</button>`} <button class="btn sm sec" data-ed="${e.id}">تعديل</button> ${can('admin') ? `<button class="btn sm danger" data-del="${e.id}">حذف</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">لا توجد مناسبات. أنشئ أول مناسبة.</td></tr>'}</tbody></table></div>
     <p class="muted small">بيانات كل مناسبة (الزائرون والحجوزات والسائقون والوجبات) مستقلة ومحفوظة، ويمكنك التنقل بينها من القائمة العلوية دون فقدان أي بيانات.</p>`;
   const form = e => `<form id="ef"><div class="fgrid"><div class="field full"><label>اسم المناسبة *</label><input name="name" required value="${esc(e?.name)}"></div>
     <div class="field"><label>تاريخ البداية *</label><input type="date" name="start_date" required value="${esc(e?.start_date)}"></div><div class="field"><label>تاريخ النهاية *</label><input type="date" name="end_date" required value="${esc(e?.end_date)}"></div>
@@ -66,7 +66,7 @@ App.view('events', async page => {
   $('#add').onclick = () => edit();
   page.onclick = async ev => {
     const b = ev.target.closest('button'); if (!b) return; const id = +(b.dataset.sw || b.dataset.ed || b.dataset.del); const e = App.events.find(x => x.id === id);
-    if (b.dataset.sw) { App.eventId = id; localStorage.setItem('gaouk_event', id); App.fillEventSelect(); location.hash = '#/dashboard'; }
+    if (b.dataset.sw) { App.eventId = id; localStorage.setItem('gaouk_event', id); App.fillEventSelect(); toast('أصبحت «' + e.name + '» المناسبة الحالية'); App.refresh(); }
     if (b.dataset.ed) edit(e);
     if (b.dataset.del) modal({ title: 'حذف مناسبة', width: 520, body: `<div class="alert err">سيُحذف كل ما يخص «${esc(e.name)}»: الزائرون والحجوزات والسائقون والمهام. تؤخذ نسخة احتياطية تلقائياً قبل الحذف.</div><div class="field"><label>اكتب اسم المناسبة للتأكيد</label><input id="cn" autocomplete="off"></div>`,
       buttons: [{ label: 'حذف نهائي', cls: 'danger', onClick: async m => { await api('DELETE', '/events/' + id, { confirm_name: $('#cn', m.el).value }); m.close(); await App.reloadEvents(); toast('تم الحذف'); App.refresh(); } }, { label: 'إلغاء', cls: 'sec', close: true }] });
@@ -83,7 +83,7 @@ App.view('visitors', async (page, ctx) => {
   if (can('admin', 'event_manager', 'building_supervisor')) { try { structure = (await api('GET', '/structure')).buildings; } catch (_) {} }
   const groups = (await api('GET', '/groups?event_id=' + App.eventId)).groups;
   const head = `<div class="page-head"><h1>الزائرون</h1>${App.user.role === 'country_supervisor' ? `<span class="badge info">دولتك: ${esc(App.countries.map(c => c.name).join('، '))}</span>` : ''}<div class="grow"></div>
-    ${writer ? `<button class="btn" id="addv">+ زائر جديد</button><button class="btn sec" id="impv">استيراد Excel</button><button class="btn sec" id="expv">تصدير Excel</button>` : ''}</div>
+    ${writer ? `<button class="btn" id="addv">+ زائر جديد</button><button class="btn" id="addng">+ فوج جديد</button><button class="btn sec" id="addfromdb">+ من قاعدة البيانات</button><button class="btn sec" id="impv">استيراد Excel</button><button class="btn sec" id="expv">تصدير Excel</button>` : ''}</div>
     <div class="tabs"><button class="${tab === 'list' ? 'on' : ''}" onclick="location.hash='#/visitors'">قائمة الزائرين</button><button class="${tab === 'groups' ? 'on' : ''}" onclick="location.hash='#/visitors/groups'">العائلات والأفواج</button></div>`;
   if (tab === 'groups') return groupsTab(page, head, groups, writer, ctx);
 
@@ -122,6 +122,8 @@ App.view('visitors', async (page, ctx) => {
   };
   if (writer) {
     $('#addv').onclick = () => visitorForm(null, groups, load);
+    $('#addng').onclick = () => groupForm(null, () => App.refresh());
+    $('#addfromdb').onclick = async () => { const p = await pickPerson(); if (p) visitorForm(null, groups, load, { full_name: p.full_name, country_id: p.country_id, category: p.category === 'group_leader' ? 'group_member' : p.category, is_leader: p.category === 'group_leader' }); };
     $('#expv').onclick = () => download('/visitors-export?' + qs({ event_id: App.eventId, ...f, format: 'xlsx' }), `gaouk-visitors-${todayStr()}.xlsx`);
     $('#impv').onclick = () => importDialog(load);
   }
@@ -129,9 +131,9 @@ App.view('visitors', async (page, ctx) => {
 });
 
 function groupsTab(page, head, groups, writer, ctx) {
-  page.innerHTML = head + `<div class="row" style="margin-bottom:10px">${writer ? '<button class="btn" id="addg">+ فوج جديد</button>' : ''}</div><div class="table-wrap"><table><thead><tr><th>الفوج</th><th>الدولة</th><th>القائد / المرشد</th><th>العدد المعلن</th><th>المسجل</th><th>الوصول</th><th>المغادرة</th><th></th></tr></thead><tbody>
-    ${groups.map(g => `<tr><td><b>${esc(g.name)}</b></td><td>${esc(g.country_name)}</td><td>${esc(g.leader_name)}</td><td>${g.members_count}</td><td>${g.registered} ${g.members_count && g.registered < g.members_count ? '<span class="badge warn">ناقص</span>' : ''}</td><td>${fmtDate(g.arrival_date)}</td><td>${fmtDate(g.departure_date)}</td>
-    <td class="actions">${writer ? `<button class="btn sm sec" data-ge="${g.id}">تعديل</button> <button class="btn sm danger" data-gd="${g.id}">حذف</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">لا توجد أفواج</td></tr>'}</tbody></table></div>
+  page.innerHTML = head + `<div class="row" style="margin-bottom:10px">${writer ? '<button class="btn" id="addg">+ فوج جديد</button>' : ''}</div><div class="table-wrap"><table><thead><tr><th>الفوج</th><th>الدولة</th><th>القائد / المرشد</th><th>البلد</th><th>رجال / نساء / أطفال</th><th>العدد المعلن</th><th>المسجل</th><th>الوصول</th><th>المغادرة</th><th></th></tr></thead><tbody>
+    ${groups.map(g => `<tr><td><b>${esc(g.name)}</b></td><td>${esc(g.country_name)}</td><td>${esc(g.leader_name)}</td><td>${esc(g.city)}</td><td>${g.men_count} / ${g.women_count} / ${g.children_count}</td><td>${g.members_count}</td><td>${g.registered} ${g.members_count && g.registered < g.members_count ? '<span class="badge warn">ناقص</span>' : ''}</td><td>${fmtDate(g.arrival_date)}</td><td>${fmtDate(g.departure_date)}</td>
+    <td class="actions">${writer ? `<button class="btn sm sec" data-ge="${g.id}">تعديل</button> <button class="btn sm danger" data-gd="${g.id}">حذف</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="10" class="empty">لا توجد أفواج</td></tr>'}</tbody></table></div>
     <p class="muted small">لتسجيل أعضاء الفوج: أضف زائراً جديداً واختر التصنيف «عضو في فوج» ثم الفوج. العائلات تُسجَّل برب الأسرة وتابعيه من نموذج الزائر.</p>`;
   if (writer) $('#addg').onclick = () => groupForm(null, () => App.refresh());
   page.onclick = async e => {
@@ -141,25 +143,33 @@ function groupsTab(page, head, groups, writer, ctx) {
   };
 }
 function groupForm(g, done) {
-  const body = `<form id="gf"><div class="fgrid"><div class="field"><label>اسم / رقم الفوج *</label><input name="name" required value="${esc(g?.name)}"></div>
-    <div class="field"><label>دولة المنشأ *</label><select name="country_id" required>${countryOpts(g?.country_id, 'اختر…')}</select></div>
-    <div class="field"><label>قائد الفوج / المرشد</label><input name="leader_name" value="${esc(g?.leader_name)}"></div><div class="field"><label>عدد الأفراد</label><input type="number" min="0" name="members_count" value="${esc(g?.members_count || '')}"></div>
+  const body = `<form id="gf"><div class="fgrid"><div class="field"><label>دولة المنشأ *</label><select name="country_id" required>${countryOpts(g?.country_id ?? (App.countries.length === 1 ? App.countries[0].id : ''), 'اختر…')}</select></div>
+    <div class="field"><label>البلد</label><input name="city" value="${esc(g?.city)}"></div>
+    <div class="field"><label>المسئول (قائد الفوج / المرشد)</label><input name="leader_name" value="${esc(g?.leader_name)}"></div>
+    <div class="field"><label>اسم / رقم الفوج (اختياري)</label><input name="name" value="${esc(g?.name)}" placeholder="يُولَّد تلقائياً إن تُرك فارغاً"></div>
+    <div class="field"><label>عدد البالغين رجال</label><input type="number" min="0" name="men_count" value="${esc(g?.men_count || '')}"></div>
+    <div class="field"><label>عدد البالغين نساء</label><input type="number" min="0" name="women_count" value="${esc(g?.women_count || '')}"></div>
+    <div class="field"><label>عدد الأطفال</label><input type="number" min="0" name="children_count" value="${esc(g?.children_count || '')}"></div>
+    <div class="field"><label>الإجمالي</label><b id="gtot" class="badge ok" style="font-size:1rem">0</b></div>
     <div class="field"><label>تاريخ الوصول</label><input type="date" name="arrival_date" value="${esc(g?.arrival_date)}"></div><div class="field"><label>تاريخ المغادرة</label><input type="date" name="departure_date" value="${esc(g?.departure_date)}"></div>
     <div class="field full"><label>ملاحظات</label><textarea name="notes">${esc(g?.notes)}</textarea></div></div></form>`;
-  return modal({ title: g ? 'تعديل فوج' : 'فوج جديد', width: 620, body, buttons: [{ label: 'حفظ', onClick: async m => {
+  const gm = modal({ title: g ? 'تعديل فوج' : 'فوج جديد', width: 620, body, buttons: [{ label: 'حفظ', onClick: async m => {
     const f = $('#gf', m.el); if (!f.reportValidity()) return; const b = formData(f);
     const r = g ? await api('PUT', '/groups/' + g.id, b) : await api('POST', '/groups', { ...b, event_id: App.eventId }); m.close(); toast('تم الحفظ'); done(r.id);
   } }, { label: 'إلغاء', cls: 'sec', close: true }] });
+  const tot = () => { const f = $('#gf', gm.el); $('#gtot', gm.el).textContent = ['men_count', 'women_count', 'children_count'].reduce((a, k) => a + (parseInt(f[k].value, 10) || 0), 0); };
+  $$('#gf input[type=number]', gm.el).forEach(i => i.addEventListener('input', tot)); tot();
+  return gm;
 }
 
-function visitorForm(v, groups, done) {
-  const isNew = !v; const isMember = v && v.category === 'family_member';
+function visitorForm(v, groups, done, pre) {
+  pre = pre || {}; const isNew = !v; const isMember = v && v.category === 'family_member';
   const countries = App.countries; const cs = App.user.role === 'country_supervisor';
   const members = v ? (v.members || []) : [];
-  const cat = v ? v.category : 'individual';
+  const cat = v ? v.category : (pre.category || 'individual');
   const body = `<form id="vf" autocomplete="off"><div id="dupbox"></div>
-    <div class="fgrid"><div class="field full"><label>الاسم الكامل *</label><input name="full_name" required value="${esc(v?.full_name)}"></div>
-    ${isMember ? '' : `<div class="field" id="cfield"><label>الدولة *</label><select name="country_id" required>${countryOpts(v?.country_id ?? (countries.length === 1 ? countries[0].id : ''), 'اختر…')}</select></div>
+    <div class="fgrid"><div class="field full"><label>الاسم الكامل *</label><input name="full_name" required value="${esc(v?.full_name ?? pre.full_name)}"></div>
+    ${isMember ? '' : `<div class="field" id="cfield"><label>الدولة *</label><select name="country_id" required>${countryOpts(v?.country_id ?? pre.country_id ?? (countries.length === 1 ? countries[0].id : ''), 'اختر…')}</select></div>
     <div class="field"><label>التصنيف *</label><select name="category">${opts(Object.entries(CAT), cat)}</select></div>`}
     <div class="field"><label>رقم الهاتف (مع مفتاح الدولة)</label><input type="tel" name="phone" dir="ltr" style="text-align:right" placeholder="+60123456789" value="${esc(v?.phone)}"></div>
     ${isMember ? `<div class="field"><label>صلة القرابة</label><input name="relation" value="${esc(v?.relation)}"></div>` : `<div class="field" id="gfield"><label>اسم المرشد أو المسؤول عنه</label><input name="guide_name" value="${esc(v?.guide_name)}"></div>`}</div>
@@ -167,7 +177,7 @@ function visitorForm(v, groups, done) {
     <div id="headbox" class="fgrid" hidden><div class="field"><label>رب الأسرة *</label><div class="row"><b id="headname" class="badge ok" style="font-size:.95rem">—</b><button type="button" class="btn sec sm" id="pickhead">اختيار / تغيير رب الأسرة</button></div></div>
       <div class="field"><label>صلة القرابة</label><input name="relation" value="${esc(v?.relation)}"></div><div class="field full"><div class="alert info" style="margin:0">الدولة وبيانات الرحلة لهذا التابع تُؤخذ تلقائياً من رب الأسرة.</div></div></div>
     <div id="grpbox" class="fgrid" hidden><div class="field"><label>الفوج *</label><select name="group_id">${opts(groups.map(g => [g.id, `${g.name} (${g.country_name})`]), v?.group_id, 'اختر الفوج…')}</select></div>
-      <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" name="is_leader" ${v?.is_leader ? 'checked' : ''}> قائد الفوج</label><button type="button" class="btn ghost sm" id="newg">+ إنشاء فوج جديد</button></div></div>
+      <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" name="is_leader" ${(v?.is_leader ?? pre.is_leader) ? 'checked' : ''}> قائد الفوج</label><button type="button" class="btn ghost sm" id="newg">+ إنشاء فوج جديد</button></div></div>
     <div id="travbox"><h3>مواعيد وبيانات الرحلة</h3><div class="fgrid"><div class="field"><label>تاريخ الوصول</label><input type="date" name="arrival_date" value="${esc(v?.arrival_date)}"></div>
     <div class="field"><label>وقت الوصول</label><input type="time" name="arrival_time" value="${esc(v?.arrival_time)}"></div><div class="field"><label>تاريخ المغادرة</label><input type="date" name="departure_date" value="${esc(v?.departure_date)}"></div>
     <div class="field"><label>رقم الرحلة</label><input name="flight_no" dir="ltr" style="text-align:right" value="${esc(v?.flight_no)}"></div><div class="field"><label>شركة الطيران</label><input name="airline" value="${esc(v?.airline)}"></div>
@@ -291,4 +301,51 @@ App.view('account', async page => {
     };
     draw();
   }
+});
+
+async function pickPerson() {
+  let list;
+  try { list = (await api('GET', '/persons?event_id=' + App.eventId)).persons; } catch (e) { toast(e.message, 'err'); return null; }
+  return new Promise(res => {
+    let fin = false; const done = x => { if (!fin) { fin = true; res(x); } };
+    const draw = t => { const q = t.trim(); const l = list.filter(p => !q || (p.full_name + ' ' + p.country_name + ' ' + (p.city || '')).includes(q));
+      return l.length ? l.map(p => `<label style="cursor:pointer"><input type="radio" name="pp" value="${p.id}"> <b>${esc(p.full_name)}</b> <span class="muted small">— ${esc(p.country_name)}${p.city ? ' / ' + esc(p.city) : ''} — ${PCAT[p.category]}${p.birth_date ? ' — ' + esc(p.birth_date) : ''}</span>${p.in_event ? ' <span class="badge warn">مسجّل في هذه المناسبة</span>' : ''}</label>`).join('') : '<div class="empty">لا نتائج. أضف المريد من تبويب «قاعدة البيانات».</div>'; };
+    const m = modal({ title: 'اختر من قاعدة البيانات', width: 620, onClose: () => done(null),
+      body: `<div class="field"><input type="search" id="pq" placeholder="ابحث بالاسم أو الدولة أو البلد…" autofocus></div><div class="sel-list" id="pl" style="max-height:340px">${draw('')}</div>`,
+      buttons: [{ label: 'اختيار', onClick: x => { const r = $('input[name=pp]:checked', x.el); if (!r) { toast('اختر مريداً من القائمة', 'warn'); return; } done(list.find(p => p.id === +r.value)); x.close(); } }, { label: 'إلغاء', cls: 'sec', onClick: x => { done(null); x.close(); } }] });
+    $('#pq', m.el).oninput = e => { $('#pl', m.el).innerHTML = draw(e.target.value); };
+    $('#pl', m.el).ondblclick = e => { const r = e.target.closest('label')?.querySelector('input'); if (r) { done(list.find(p => p.id === +r.value)); m.close(); } };
+  });
+}
+const PCAT = { family_head: 'رب أسرة', family_member: 'تابع لأسرة', individual: 'فرد', group_member: 'ضمن فوج', group_leader: 'مسئول فوج' };
+
+/* ============ قاعدة البيانات (المريدون) ============ */
+App.view('persons', async page => {
+  const S = App._pf ||= { q: '', country_id: '', category: '' };
+  const personForm = (p, done) => {
+    const body = `<form id="pf"><div class="fgrid"><div class="field full"><label>الاسم *</label><input name="full_name" required value="${esc(p?.full_name)}"></div>
+      <div class="field"><label>تاريخ الميلاد</label><input type="date" name="birth_date" value="${esc(p?.birth_date)}"></div>
+      <div class="field"><label>الدولة *</label><select name="country_id" required>${countryOpts(p?.country_id ?? (App.countries.length === 1 ? App.countries[0].id : ''), 'اختر…')}</select></div>
+      <div class="field"><label>البلد</label><input name="city" value="${esc(p?.city)}"></div>
+      <div class="field"><label>التصنيف *</label><select name="category" required>${opts(Object.entries(PCAT), p?.category || 'individual')}</select></div></div></form>`;
+    modal({ title: p ? 'تعديل بيانات مريد' : 'إضافة مريد', width: 560, body, buttons: [{ label: 'حفظ', onClick: async m => {
+      const f = $('#pf', m.el); if (!f.reportValidity()) return; const b = formData(f);
+      p ? await api('PUT', '/persons/' + p.id, b) : await api('POST', '/persons', b); m.close(); toast('تم الحفظ'); done();
+    } }, { label: 'إلغاء', cls: 'sec', close: true }] });
+  };
+  page.innerHTML = `<div class="page-head"><h1>قاعدة البيانات</h1><div class="grow"></div><button class="btn" id="addp">+ إضافة مريد</button></div>
+    <div class="filters card" style="padding:12px"><div><label>بحث</label><input type="search" id="p_q" value="${esc(S.q)}" placeholder="الاسم أو البلد…"></div>
+    <div><label>الدولة</label><select id="p_c">${countryOpts(S.country_id, 'الكل')}</select></div><div><label>التصنيف</label><select id="p_k">${opts(Object.entries(PCAT), S.category, 'الكل')}</select></div></div>
+    <div id="plist"></div><p class="muted small">المريدون المسجلون هنا متاحون للاختيار في أي مناسبة من تبويب «الزائرون» ← «من قاعدة البيانات».</p>`;
+  let list = [];
+  const draw = () => { $('#plist').innerHTML = `<div class="table-wrap"><table><thead><tr><th>الاسم</th><th>تاريخ الميلاد</th><th>الدولة</th><th>البلد</th><th>التصنيف</th><th></th></tr></thead><tbody>${list.map(p => `<tr><td><b>${esc(p.full_name)}</b></td><td>${p.birth_date ? fmtDate(p.birth_date) : '—'}</td><td>${esc(p.country_name)}</td><td>${esc(p.city) || '—'}</td><td>${PCAT[p.category]}</td>
+    <td class="actions"><button class="btn sm sec" data-pe="${p.id}">تعديل</button> <button class="btn sm danger" data-pd="${p.id}">حذف</button></td></tr>`).join('') || '<tr><td colspan="6" class="empty">لا يوجد مريدون</td></tr>'}</tbody></table></div>`; };
+  const load = async () => { list = (await api('GET', '/persons?' + qs(S))).persons; draw(); };
+  const rd = debounce(() => { S.q = $('#p_q').value; S.country_id = $('#p_c').value; S.category = $('#p_k').value; load(); }, 250);
+  ['p_q', 'p_c', 'p_k'].forEach(i => { $('#' + i).addEventListener('input', rd); $('#' + i).addEventListener('change', rd); });
+  $('#addp').onclick = () => personForm(null, load);
+  page.onclick = async e => { const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.pe) personForm(list.find(p => p.id === +b.dataset.pe), load);
+    if (b.dataset.pd) { const p = list.find(x => x.id === +b.dataset.pd); if (await confirmBox(`حذف «${p.full_name}» من قاعدة البيانات؟`, { danger: true, okText: 'حذف' })) { await api('DELETE', '/persons/' + p.id); toast('تم الحذف'); load(); } } };
+  await load();
 });
