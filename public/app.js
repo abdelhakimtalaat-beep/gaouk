@@ -115,7 +115,7 @@ App.view = (id, fn) => { App.views[id] = fn; };
 App.showLogin = function (msg) {
   document.body.classList.remove('printing-modal');
   $('#root').innerHTML = `<div class="login-wrap"><div class="login-card">
-    <div class="brand"><img class="logo-img" src="logo.png" alt="شعار جاؤوك"><h1>جاؤوك</h1></div>
+    <div class="brand"><h1>جاؤوك</h1></div>
     ${msg ? `<div class="alert warn">${esc(msg)}</div>` : ''}
     <div id="newbox" class="tc"><p class="muted" style="margin-top:0">للدخول أرسل طلب انضمام باسمك ورقم هاتفك. وبمجرد موافقة المشرف يعمل التطبيق على هذا الجهاز تلقائياً.</p>
       <button type="button" class="btn dark" id="joinbtn" style="width:100%;justify-content:center;padding:11px">طلب انضمام</button></div>
@@ -156,7 +156,7 @@ const Bio = {
   // شاشة القفل: لا يستمر التطبيق حتى تنجح البصمة
   gate() {
     return new Promise(res => {
-      $('#root').innerHTML = `<div class="login-wrap"><div class="login-card tc"><div class="brand"><img class="logo-img" src="logo.png" alt="شعار جاؤوك"><h1>جاؤوك</h1></div>
+      $('#root').innerHTML = `<div class="login-wrap"><div class="login-card tc"><div class="brand"><h1>جاؤوك</h1></div>
         <p class="muted">التطبيق مقفل. افتحه ببصمتك أو وجهك.</p><div id="gerr" class="alert err" hidden></div>
         <button class="btn dark" id="gbtn" style="width:100%;justify-content:center;padding:12px">فتح بالبصمة / الوجه</button>
       </div></div>`;
@@ -188,7 +188,7 @@ App.joinDialog = function () {
 App.showPending = function () {
   document.body.classList.remove('printing-modal');
   $('#root').innerHTML = `<div class="login-wrap"><div class="login-card tc" id="pw">
-    <div class="brand"><img class="logo-img" src="logo.png" alt="شعار جاؤوك"><h1>جاؤوك</h1></div>
+    <div class="brand"><h1>جاؤوك</h1></div>
     <div class="alert info"><b>وصل طلبك إلى المشرف</b><br>بمجرد موافقته يُفتح التطبيق هنا تلقائياً على هذا الجهاز. اترك هذه الصفحة مفتوحة أو عد إليها لاحقاً.</div>
     <p class="muted small">الحساب مرتبط بهذا الجهاز فقط.</p>
     <button type="button" class="btn ghost sm" id="pcancel">إلغاء الطلب والعودة</button></div></div>`;
@@ -235,7 +235,7 @@ App.visibleNav = () => App.nav.filter(n => !n[3] || n[3].includes(App.user.role)
 App.buildShell = function () {
   const u = App.user;
   $('#root').innerHTML = `<div class="app"><aside class="side" id="side">
-    <div class="brand"><img class="logo-img" src="logo-light.png" alt="شعار جاؤوك"><h1>جاؤوك</h1></div>
+    <div class="brand"><h1>جاؤوك</h1></div>
     <nav id="nav">${App.visibleNav().map(n => `<a data-id="${n[0]}" href="#/${n[0]}">${icon(n[2])}<span>${n[1]}</span></a>`).join('')}</nav>
     <div class="foot">${esc(App.roleLabels[u.role])}</div></aside>
     <div class="main"><header class="top"><button class="btn sec menu-btn" id="mb" aria-label="القائمة">☰</button>
