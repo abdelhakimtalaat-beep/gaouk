@@ -1,6 +1,6 @@
 'use strict';
-// عنوان التطبيق: خط الشعار المعتمد (صورة شفافة بلونين: داكن للخلفيات الفاتحة، وفاتح للقائمة الجانبية)
-const WORDMARK = '<img class="wordmark" src="title.png" alt="جاؤوك">', WORDMARK_LIGHT = '<img class="wordmark" src="title-light.png" alt="جاؤوك">';
+// عنوان التطبيق: صورة «جاؤوك» كما هي (حبر على ورق)
+const WORDMARK = '<img class="wordmark" src="title.jpg" alt="جاؤوك">', WORDMARK_LIGHT = WORDMARK;
 // «جاؤوك» — النواة: الاتصال بالخادم، الصلاحيات، الهيكل العام، أدوات مشتركة
 const App = { user: null, roleLabels: {}, events: [], eventId: null, countries: [], views: {}, nav: [], cache: {} };
 
