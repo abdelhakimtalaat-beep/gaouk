@@ -39,7 +39,7 @@ App.view('housing', async (page, ctx) => {
         ${editing ? '<div class="alert info">وضع التحرير: اسحب الغرفة لتحريكها، واسحب المربع الأبيض في ركنها لتغيير حجمها، وانقر عليها لتعديل رقمها وسعتها. ارفع صورة الكروكي لتظهر كخلفية ترسم فوقها الغرف بنفس توزيعها الحقيقي.</div>' : ''}
         ${!rooms.length ? `<div class="empty">لا توجد غرف في هذا الدور بعد.${admin ? ' اضغط «تحرير الكروكي والغرف» ثم «+ غرفة»، أو ارفع الكروكي أولاً.' : ''}</div>` : ''}
         <div class="mapbox ${editing ? 'editing' : ''}" id="map">${data && data.floor.has_plan ? `<img class="plan" alt="" data-plan="${S.f}" src="${(App.planCache || {})[S.f + ':' + (App._planV || 0)] || ''}">` : ''}
-        ${rooms.map(r => { const L = layout[r.id] || r; return `<div class="room ${r.state}" data-r="${r.id}" style="left:${L.x}%;top:${L.y}%;width:${L.w}%;height:${L.h}%" title="غرفة ${esc(r.number)} — ${STATE_AR[r.state]}"><span style="font-size:1.05em">${esc(r.number)}</span><small>${r.status === 'active' ? `${r.booked}/${r.capacity}` : 'خارج الخدمة'}</small>${editing ? '<span class="rsz" data-rsz></span>' : ''}</div>`; }).join('')}</div></div>
+        ${rooms.map(r => { const L = layout[r.id] || r; return `<div class="room ${r.state}" data-r="${r.id}" style="left:${L.x}%;top:${L.y}%;width:${L.w}%;height:${L.h}%" title="غرفة ${esc(r.number)} — ${STATE_AR[r.state]}${r.occupants.length ? '\n' + esc(r.occupants.map(o => o.full_name).join('، ')) : ''}"><span style="font-size:1.05em">${esc(r.number)}</span><small>${r.status === 'active' ? `${r.booked}/${r.capacity}` : 'خارج الخدمة'}</small>${editing ? '<span class="rsz" data-rsz></span>' : ''}</div>`; }).join('')}</div></div>
       ${rooms.length ? `<div class="card" style="margin-top:14px"><h3>قائمة الغرف</h3><div class="table-wrap"><table><thead><tr><th>الغرفة</th><th>السعة</th><th>المحجوز</th><th>المتبقي</th><th>الحالة</th><th>المواصفات</th><th>المقيمون</th></tr></thead><tbody>${rooms.map(r => `<tr data-rr="${r.id}" style="cursor:pointer"><td><b>${esc(r.number)}</b></td><td>${r.capacity}</td><td>${r.booked}</td><td>${r.remaining}</td><td><span class="badge ${r.state}">${STATE_AR[r.state]}</span></td><td>${roomFeat(r)}</td><td>${esc(r.occupants.map(o => o.full_name).join('، ')) || '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table></div></div>` : ''}`}`;
     wire();
   };
@@ -147,7 +147,10 @@ App.view('housing', async (page, ctx) => {
       if ($('#ag', box)) $('#ag', box).onchange = e => { if (!e.target.value) return; $$(`#al input[data-g="${e.target.value}"]`, box).forEach(x => (x.checked = true)); cnt(); };
       $('#go', box).onclick = async () => {
         const ids = $$('#al input:checked', box).map(x => +x.value); if (!ids.length) return toast('اختر زائراً واحداً على الأقل', 'warn');
-        try { await api('POST', '/bookings/bulk', { event_id: App.eventId, room_id: room.id, visitor_ids: ids, from_date: $('#af', box).value || undefined, to_date: $('#at', box).value || undefined }); toast(`تم تسكين ${ids.length}`); const mm = box.closest('.overlay'); mm.remove(); await load(); openRoom(room.id); }
+        try { await api('POST', '/bookings/bulk', { event_id: App.eventId, room_id: room.id, visitor_ids: ids, from_date: $('#af', box).value || undefined, to_date: $('#at', box).value || undefined }); toast(`تم تسكين ${ids.length}`);
+          // الكروكي يعرض إشغال تاريخ واحد: انتقل إلى تاريخ الحجز الجديد إن لم يشمل التاريخ المعروض
+          try { const bs = (await api('GET', `/rooms/${room.id}/bookings`)).bookings.filter(x => ids.includes(x.visitor_id)); if (bs.length && !bs.some(x => x.from_date <= S.date && x.to_date > S.date)) { const d = bs.map(x => x.from_date).sort()[0]; S.date = d < ev.start_date ? ev.start_date : d > ev.end_date ? ev.end_date : d; toast(`انتقلنا إلى ${S.date} (تاريخ بدء الإقامة) لتظهر الحجوزات في الكروكي`); } } catch (_) {}
+          const mm = box.closest('.overlay'); mm.remove(); await load(); openRoom(room.id); }
         catch (e) { toast(e.message, 'err'); }
       };
     }).catch(e => (box.innerHTML = `<div class="alert err">${esc(e.message)}</div>`));
