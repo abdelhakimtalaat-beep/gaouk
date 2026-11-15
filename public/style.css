@@ -230,3 +230,10 @@ td{border-bottom:1px solid #edf1de}
 
 .nav-badge{margin-right:auto;background:var(--danger);color:#fff;border-radius:20px;min-width:22px;height:22px;padding:0 7px;display:inline-grid;place-items:center;font-size:.78rem;font-weight:800;box-shadow:0 0 0 2px rgba(255,255,255,.25)}
 .side nav a.on .nav-badge{box-shadow:0 0 0 2px rgba(255,255,255,.7)}
+
+/* رموز الأسرّة داخل مربع الغرفة: أبيض = شاغر، أصفر = مشغول (على شريط داكن شفاف ليظهر اللونان على أي خلفية) */
+.room .beds{display:flex;flex-wrap:wrap;justify-content:center;gap:2px;max-width:92%;line-height:0;margin-top:4px;padding:3px 6px;background:rgba(20,40,25,.5);border-radius:9px}
+.room .bed{width:26px;height:26px;fill:#fff}
+.room .bed.on{fill:#ffd21f}
+.room .beds small{color:#fff;line-height:26px;font-size:.7rem;display:inline-block}
+@media (max-width:900px){.room .bed{width:17px;height:17px}.room .beds small{line-height:17px}}
