@@ -277,7 +277,18 @@ App.view('account', async page => {
   const u = App.user;
   page.innerHTML = `<div class="page-head"><h1>حسابي</h1></div><div class="grid cols2"><div class="card"><h3>بياناتي</h3><p><b>${esc(u.name)}</b><br><span class="muted">${esc(App.roleLabels[u.role])}</span></p><p>اسم المستخدم: <span class="ltr">${esc(u.username)}</span></p>
     ${u.role === 'country_supervisor' ? `<p>الدول المسؤول عنها: ${esc(App.countries.map(c => c.name).join('، '))}</p><p class="muted small">لا يمكنك الاطلاع على بيانات الدول الأخرى أو تعديلها إلا بتفويض من مدير النظام.</p>` : ''}</div>
-    <form class="card" id="pf"><h3>تغيير كلمة المرور</h3><div class="field"><label>كلمة المرور الحالية</label><input type="password" name="old_password" required autocomplete="current-password"></div>
-    <div class="field"><label>كلمة المرور الجديدة (8 أحرف فأكثر)</label><input type="password" name="new_password" required minlength="8" autocomplete="new-password"></div><button class="btn">حفظ</button></form></div>`;
-  $('#pf').onsubmit = async e => { e.preventDefault(); try { await api('POST', '/change-password', formData(e.target)); toast('تم تغيير كلمة المرور'); e.target.reset(); } catch (er) { toast(er.message, 'err'); } };
+    ${SB.hasDevice() ? '<div class="card" id="devcard"><h3>جهازي</h3><p>هذا الجهاز مربوط بحسابك، وتدخل منه تلقائياً دون كلمة مرور. لا يمكن فتح الحساب من جهاز آخر إلا برمز جديد من المشرف.</p><div id="biobox" class="muted small">جارٍ فحص دعم البصمة…</div></div>' : `<form class="card" id="pf"><h3>تغيير كلمة المرور</h3><div class="field"><label>كلمة المرور الحالية</label><input type="password" name="old_password" required autocomplete="current-password"></div>
+    <div class="field"><label>كلمة المرور الجديدة (8 أحرف فأكثر)</label><input type="password" name="new_password" required minlength="8" autocomplete="new-password"></div><button class="btn">حفظ</button></form>`}</div>`;
+  if ($('#pf')) $('#pf').onsubmit = async e => { e.preventDefault(); try { await api('POST', '/change-password', formData(e.target)); toast('تم تغيير كلمة المرور'); e.target.reset(); } catch (er) { toast(er.message, 'err'); } };
+  if ($('#biobox')) {
+    const draw = async () => {
+      const box = $('#biobox'); if (!box) return;
+      if (!(await Bio.supported())) { box.textContent = 'قفل البصمة/الوجه غير مدعوم في هذا المتصفح أو الجهاز (اختياري).'; return; }
+      box.innerHTML = Bio.enabled() ? '<p class="alert info" style="margin:0 0 8px">قفل البصمة/الوجه <b>مفعّل</b>: يُطلب عند كل فتح للتطبيق.</p><button class="btn sec sm" id="biooff">إيقاف القفل</button>'
+        : '<p style="margin:0 0 8px" class="muted">قفل التطبيق ببصمة الإصبع أو الوجه (اختياري).</p><button class="btn sm" id="bioon">تفعيل القفل بالبصمة / الوجه</button>';
+      if ($('#bioon')) $('#bioon').onclick = async () => { try { await Bio.enable(); toast('تم تفعيل القفل'); } catch (e) { toast('لم يكتمل التفعيل: ' + (e.name === 'NotAllowedError' ? 'تم الإلغاء' : 'غير مدعوم'), 'err'); } draw(); };
+      if ($('#biooff')) $('#biooff').onclick = async () => { try { await Bio.verify(); Bio.disable(); toast('أُوقف القفل'); } catch (_) { toast('يلزم التحقق بالبصمة لإيقاف القفل', 'err'); } draw(); };
+    };
+    draw();
+  }
 });

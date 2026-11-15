@@ -63,6 +63,8 @@ const Adapter = (() => {
       const me = async () => { const r = await rpc('GET', '/me'); return { user: r.user, roles: Compute.ROLE_LABELS }; };
       if (path === '/login') { await SB.login(body.username, body.password); return me(); }
       if (path === '/join-request') return SB.joinRequest(body);
+      if (path === '/activate') { await SB.activate(body); return me(); }
+      if (path === '/issue-code') return SB.call('admin_issue_code', { p_user_id: body.user_id });
       if (path === '/logout') { await SB.logout(); return { ok: true }; }
       if (path === '/me') return me();
       if (path === '/change-password') {
