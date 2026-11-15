@@ -101,7 +101,12 @@ const Compute = (() => {
   }
 
   // ----- التقارير -----
+  // مدى التواريخ: date_from / date_to (أيٌّ منهما اختياري؛ بدونهما = كل أيام المناسبة). q.date يبقى للتوافق (يوم واحد)
+  const range = q => { let f = isDate(q.date_from) ? q.date_from : '', t = isDate(q.date_to) ? q.date_to : ''; if (isDate(q.date)) { f = f || q.date; t = t || q.date; } if (f && t && f > t) [f, t] = [t, f]; return { f, t }; };
+  const inRange = (d, r) => !!d && (!r.f || d >= r.f) && (!r.t || d <= r.t);
+  const rangeText = r => r.f || r.t ? `الفترة: ${r.f || 'بداية المناسبة'} ← ${r.t || 'نهاية المناسبة'}` : 'كل أيام المناسبة';
   const C = (key, label, width = 18) => ({ key, label, width });
+  const dayAr = d => ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'][new Date(d + 'T00:00:00Z').getUTCDay()];
   const roomText = bs => bs.map(b => `${b.building_name} / ${b.floor_name} / ${b.room_number}`).join('، ');
   const rv = (rpc, q, country) => loadVisitors(rpc, { event_id: q.event_id, country_id: country || q.country_id });
   const REPORTS = {
@@ -130,13 +135,29 @@ const Compute = (() => {
       return { cols: [C('type', 'النوع', 9), C('name', 'الاسم / الفوج', 24), C('country', 'الدولة', 14), C('leader', 'رب الأسرة / القائد', 22), C('count', 'العدد', 8), C('ad', 'الوصول', 12), C('dd', 'المغادرة', 12), C('rooms', 'الغرف', 34), C('members', 'الأفراد', 44)], rows };
     } },
     arrivals_departures: { roles: ['admin', 'event_manager', 'country_supervisor', 'transport'], title: 'كشف القادمين والمغادرين', async build(rpc, u, q) {
-      const vs = await rv(rpc, q); const date = isDate(q.date) ? q.date : ''; const rows = [];
+      const vs = await rv(rpc, q); const R = range(q); const rows = [];
       for (const v of vs) {
-        if (v.arrival_date && (!date || v.arrival_date === date)) rows.push({ date: v.arrival_date, type: 'وصول', time: v.arrival_time, name: v.full_name, country: v.country_name, flight: [v.airline, v.flight_no].filter(Boolean).join(' '), airport: v.airport, driver: v.transports.filter(t => t.kind === 'pickup').map(t => t.driver_name).join('، ') });
-        if (v.departure_date && (!date || v.departure_date === date)) rows.push({ date: v.departure_date, type: 'مغادرة', time: '', name: v.full_name, country: v.country_name, flight: '', airport: '', driver: v.transports.filter(t => t.kind === 'dropoff').map(t => t.driver_name).join('، ') });
+        if (inRange(v.arrival_date, R)) rows.push({ date: v.arrival_date, type: 'وصول', time: v.arrival_time, name: v.full_name, country: v.country_name, flight: [v.airline, v.flight_no].filter(Boolean).join(' '), airport: v.airport, driver: v.transports.filter(t => t.kind === 'pickup').map(t => t.driver_name).join('، ') });
+        if (inRange(v.departure_date, R)) rows.push({ date: v.departure_date, type: 'مغادرة', time: '', name: v.full_name, country: v.country_name, flight: '', airport: '', driver: v.transports.filter(t => t.kind === 'dropoff').map(t => t.driver_name).join('، ') });
       }
       rows.sort((a, b) => a.date.localeCompare(b.date) || a.type.localeCompare(b.type) || a.time.localeCompare(b.time));
-      return { cols: [C('date', 'التاريخ', 12), C('type', 'النوع', 9), C('time', 'الوقت', 8), C('name', 'الاسم', 26), C('country', 'الدولة', 14), C('flight', 'الرحلة', 18), C('airport', 'المطار', 16), C('driver', 'السائق', 18)], rows };
+      return { cols: [C('date', 'التاريخ', 12), C('type', 'النوع', 9), C('time', 'الوقت', 8), C('name', 'الاسم', 26), C('country', 'الدولة', 14), C('flight', 'الرحلة', 18), C('airport', 'المطار', 16), C('driver', 'السائق', 18)], rows, subtitle: rangeText(R) };
+    } },
+    arrivals_counts: { roles: ['admin', 'event_manager', 'country_supervisor', 'transport'], title: 'القادمون والمغادرون — أعداد حسب اليوم والرحلة', async build(rpc, u, q) {
+      const vs = await rv(rpc, q); const R = range(q); const m = new Map();
+      const add = (date, flight, airport, k) => { const key = date + '|' + flight + '|' + airport; const r = m.get(key) || { date, flight, airport, arr: 0, dep: 0 }; r[k]++; m.set(key, r); };
+      for (const v of vs) {
+        if (inRange(v.arrival_date, R)) add(v.arrival_date, [v.airline, v.flight_no].filter(Boolean).join(' ') || 'بدون رحلة', v.airport || '', 'arr');
+        if (inRange(v.departure_date, R)) add(v.departure_date, '—', '', 'dep');   // المغادرة لا تُسجَّل لها رحلة، فتُجمع باليوم
+      }
+      const days = [...new Set([...m.values()].map(r => r.date))].sort(); const rows = []; let A = 0, D = 0;
+      for (const d of days) {
+        const list = [...m.values()].filter(r => r.date === d).sort((a, b) => (a.flight === '—') - (b.flight === '—') || a.flight.localeCompare(b.flight));
+        let sa = 0, sd = 0; for (const r of list) { rows.push({ date: d, day: dayAr(d), flight: r.flight, airport: r.airport, arr: r.arr, dep: r.dep, total: r.arr + r.dep }); sa += r.arr; sd += r.dep; }
+        rows.push({ date: d, day: '', flight: 'إجمالي اليوم', airport: '', arr: sa, dep: sd, total: sa + sd }); A += sa; D += sd;
+      }
+      if (days.length) rows.push({ date: 'الإجمالي', day: '', flight: '', airport: '', arr: A, dep: D, total: A + D });
+      return { cols: [C('date', 'التاريخ', 13), C('day', 'اليوم', 11), C('flight', 'الرحلة', 22), C('airport', 'المطار', 16), C('arr', 'عدد القادمين', 13), C('dep', 'عدد المغادرين', 13), C('total', 'المجموع', 10)], rows, subtitle: rangeText(R) };
     } },
     housing: { roles: HOUSERS, title: 'كشف تسكين المباني والأدوار', async build(rpc, u, q) {
       let bs = (await rpc('GET', '/bookings', { event_id: q.event_id })).bookings;
@@ -153,7 +174,7 @@ const Compute = (() => {
     } },
     drivers_tasks: { roles: TRANSPORTERS, title: 'كشف السائقين ومهامهم', async build(rpc, u, q) {
       const st = { not_started: 'لم يبدأ', on_the_way: 'في الطريق', received: 'تم الاستقبال', done: 'انتهت المهمة' };
-      const rows = (await transportData(rpc, q.event_id, isDate(q.date) ? q.date : undefined)).tasks.map(t => ({ driver: t.driver_name, phone: t.driver_phone, car: [t.car_type, t.car_number].filter(Boolean).join(' - '), cap: t.car_capacity, kind: t.kind === 'pickup' ? 'استقبال' : 'توصيل مغادرة', date: t.task_date, time: t.task_time, airport: t.airport, who: t.visitor_name || ('فوج: ' + t.group_name), country: t.country_name, pax: t.passengers, flight: t.flight_info, status: st[t.status] }));
+      const R = range(q); const rows = (await transportData(rpc, q.event_id, undefined)).tasks.filter(t => !R.f && !R.t || inRange(t.task_date, R)).map(t => ({ driver: t.driver_name, phone: t.driver_phone, car: [t.car_type, t.car_number].filter(Boolean).join(' - '), cap: t.car_capacity, kind: t.kind === 'pickup' ? 'استقبال' : 'توصيل مغادرة', date: t.task_date, time: t.task_time, airport: t.airport, who: t.visitor_name || ('فوج: ' + t.group_name), country: t.country_name, pax: t.passengers, flight: t.flight_info, status: st[t.status] }));
       return { cols: [C('driver', 'السائق', 18), C('phone', 'الهاتف', 16), C('car', 'السيارة', 20), C('cap', 'السعة', 7), C('kind', 'المهمة', 12), C('date', 'التاريخ', 12), C('time', 'الوقت', 8), C('airport', 'المطار', 16), C('who', 'الزائر / الفوج', 24), C('country', 'الدولة', 12), C('pax', 'الركاب', 8), C('flight', 'الرحلة', 16), C('status', 'الحالة', 13)], rows };
     } },
     meals_daily: { roles: MEAL_ROLES, title: 'كشف الوجبات اليومية', async build(rpc, u, q) {

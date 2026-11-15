@@ -2,7 +2,7 @@
 // رمز السرير: أبيض = شاغر، أصفر = مشغول
 const bedIcon = on => `<svg class="bed ${on ? 'on' : ''}" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="5" width="3" height="14" rx="1"/><rect x="1.5" y="11" width="21" height="6" rx="1.5"/><rect x="6" y="8" width="6" height="3.2" rx="1.4"/><rect x="19.5" y="17" width="3" height="2.5" rx=".8"/></svg>`;
 const bedsRow = r => r.status === 'active' && r.capacity > 0 ? `<div class="beds" title="${r.booked} مشغول من ${r.capacity}">${Array.from({ length: Math.min(r.capacity, 12) }, (_, i) => bedIcon(i < r.booked)).join('')}${r.capacity > 12 ? '<small>+' + (r.capacity - 12) + '</small>' : ''}</div>` : '';
-const roomFeat = r => `<span class="badge ${r.has_ac ? 'ok' : 'info'}">${r.has_ac ? 'بتكييف' : 'بدون تكييف'}</span> <span class="badge ${r.has_bath ? 'ok' : 'info'}">${r.has_bath ? 'بحمام' : 'بدون حمام'}</span>`;
+const roomFeat = r => `<span class="badge ${r.has_ac ? 'ok' : 'info'}">${r.has_ac ? 'بتكييف' : 'بدون تكييف'}</span> <span class="badge ${r.bath_count ? 'ok' : 'info'}">${['بدون حمام', 'حمام واحد', '2 حمام'][r.bath_count || 0]}</span>`;
 // تسكين الغرف (الخريطة التفاعلية + محرر الكروكي)، السائقون والنقل، الوجبات والإعاشة
 
 /* ================= تسكين الغرف ================= */
@@ -99,7 +99,7 @@ App.view('housing', async (page, ctx) => {
   }
   function roomEditor(r) {
     const body = `<form id="rf"><div class="fgrid"><div class="field"><label>رقم الغرفة *</label><input name="number" required value="${esc(r?.number)}"></div><div class="field"><label>السعة (عدد الأسرّة/الأماكن) *</label><input type="number" min="0" max="200" name="capacity" required value="${esc(r?.capacity ?? '')}"></div>
-      <div class="field"><label>الحالة</label><select name="status">${opts([['active', 'في الخدمة'], ['out_of_service', 'خارج الخدمة']], r?.status || 'active')}</select></div><div class="field"><label>التكييف</label><select name="has_ac">${opts([['true', 'بتكييف'], ['false', 'بدون تكييف']], String(!!r?.has_ac))}</select></div><div class="field"><label>الحمام</label><select name="has_bath">${opts([['true', 'بحمام'], ['false', 'بدون حمام']], String(!!r?.has_bath))}</select></div><div class="field full"><label>ملاحظات</label><textarea name="notes">${esc(r?.notes)}</textarea></div></div></form>`;
+      <div class="field"><label>الحالة</label><select name="status">${opts([['active', 'في الخدمة'], ['out_of_service', 'خارج الخدمة']], r?.status || 'active')}</select></div><div class="field"><label>التكييف</label><select name="has_ac">${opts([['true', 'بتكييف'], ['false', 'بدون تكييف']], String(!!r?.has_ac))}</select></div><div class="field"><label>الحمام</label><select name="bath_count">${opts([['1', 'حمام واحد'], ['2', '2 حمام'], ['0', 'بدون حمام']], String(r?.bath_count ?? 0))}</select></div><div class="field full"><label>ملاحظات</label><textarea name="notes">${esc(r?.notes)}</textarea></div></div></form>`;
     modal({ title: r ? 'تعديل الغرفة ' + r.number : 'غرفة جديدة', width: 540, body, buttons: [{ label: 'حفظ', onClick: async m => {
       const f = $('#rf', m.el); if (!f.reportValidity()) return; const b = formData(f);
       if (r) { await api('PUT', '/rooms/' + r.id, { ...b, ...layout[r.id] }); } else { const sp = freeSpot(); await api('POST', '/rooms', { ...b, floor_id: S.f, ...sp }); }

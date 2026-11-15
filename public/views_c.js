@@ -90,27 +90,29 @@ App.view('countries', async (page, ctx) => {
 /* ================= التقارير ================= */
 App.view('reports', async (page, ctx) => {
   const { reports } = await api('GET', '/report-list'); if (ctx.stale()) return;
-  const R = (App._rp ||= { type: null, country_id: '', date: '', building_id: '' }); if (!reports.find(r => r.key === R.type)) R.type = reports[0]?.key;
-  const needDate = ['arrivals_departures', 'rooms_status', 'drivers_tasks'], needBld = ['housing'], needCountry = ['visitors_all', 'families_groups', 'arrivals_departures'];
+  const R = (App._rp ||= { type: null, country_id: '', date: '', from: '', to: '', building_id: '' }); if (!reports.find(r => r.key === R.type)) R.type = reports[0]?.key;
+  const needDate = ['rooms_status'], needRange = ['arrivals_departures', 'arrivals_counts', 'drivers_tasks'], needBld = ['housing'], needCountry = ['visitors_all', 'families_groups', 'arrivals_departures', 'arrivals_counts'];
   const structure = can('admin', 'event_manager', 'building_supervisor') ? (await api('GET', '/structure')).buildings : [];
   const cs = App.user.role === 'country_supervisor';
   page.innerHTML = `<div class="page-head"><h1>مركز التقارير</h1></div>${cs ? '<div class="alert info">التقارير تعرض بيانات دولتك فقط.</div>' : ''}
     <div class="card" style="margin-bottom:14px"><div class="filters" style="margin:0"><div><label>التقرير</label><select id="rt">${opts(reports.map(r => [r.key, r.title]), R.type)}</select></div>
     <div id="rc"><label>الدولة</label><select id="rcountry">${countryOpts(R.country_id, 'الكل')}</select></div><div id="rd"><label>التاريخ (اختياري)</label><input type="date" id="rdate" value="${R.date}"></div>
+    <div id="rr"><label>الفترة: من</label><input type="date" id="rfrom" value="${R.from}"></div><div id="rr2"><label>إلى</label><input type="date" id="rto" value="${R.to}"></div><div id="rr3" style="align-self:flex-end"><button class="btn ghost sm" id="rall" type="button" style="white-space:nowrap">كل أيام المناسبة</button></div><div class="muted small" id="rr4" style="flex-basis:100%">الفترة: اترك «من» و«إلى» فارغين لكل أيام المناسبة، أو حدّد يوماً واحداً (نفس التاريخ في الحقلين) أو مجموعة أيام متتالية.</div>
     <div id="rb"><label>المبنى</label><select id="rbld">${opts(structure.map(b => [b.id, b.name]), R.building_id, 'الكل')}</select></div>
     <div class="row"><button class="btn" id="run">عرض</button></div></div></div><div id="out"></div>`;
-  const sync = () => { R.type = $('#rt').value; $('#rc').hidden = !needCountry.includes(R.type) || cs && App.countries.length < 2; $('#rd').hidden = !needDate.includes(R.type); $('#rb').hidden = !needBld.includes(R.type); }; sync();
+  const sync = () => { R.type = $('#rt').value; $('#rc').hidden = !needCountry.includes(R.type) || cs && App.countries.length < 2; $('#rd').hidden = !needDate.includes(R.type); for (const i of ['rr', 'rr2', 'rr3', 'rr4']) $('#' + i).hidden = !needRange.includes(R.type); $('#rb').hidden = !needBld.includes(R.type); }; sync();
   $('#rt').onchange = () => { sync(); run(); };
-  const params = () => ({ event_id: App.eventId, country_id: $('#rc').hidden ? '' : $('#rcountry').value, date: $('#rd').hidden ? '' : $('#rdate').value, building_id: $('#rb').hidden ? '' : $('#rbld').value });
+  const params = () => ({ event_id: App.eventId, country_id: $('#rc').hidden ? '' : $('#rcountry').value, date: $('#rd').hidden ? '' : $('#rdate').value, date_from: $('#rr').hidden ? '' : $('#rfrom').value, date_to: $('#rr').hidden ? '' : $('#rto').value, building_id: $('#rb').hidden ? '' : $('#rbld').value });
   async function run() {
-    R.country_id = $('#rcountry').value; R.date = $('#rdate').value; R.building_id = $('#rbld').value; const p = params();
+    R.country_id = $('#rcountry').value; R.date = $('#rdate').value; R.from = $('#rfrom').value; R.to = $('#rto').value; R.building_id = $('#rbld').value; const p = params();
     const d = await api('GET', `/reports/${R.type}?` + qs(p)); if (ctx.stale()) return;
     $('#out').innerHTML = `<div class="card" id="sheet"><div class="row no-print" style="margin-bottom:10px"><h2 style="margin:0">${esc(d.title)}</h2><span class="badge">${d.rows.length} سطر</span><div class="grow"></div><button class="btn sec" id="pr">طباعة / PDF</button><button class="btn sec" id="xl">تصدير Excel</button><button class="btn sec" id="cv">CSV</button></div>
       <div class="print-only tc" style="margin-bottom:10px"><h2>جاؤوك — ${esc(d.title)}</h2><div>${esc(d.event)} ${d.subtitle ? '— ' + esc(d.subtitle) : ''}</div><div class="small">أُعدّ بواسطة ${esc(d.generated_by)} — ${new Date(d.generated_at).toLocaleString('ar-EG')}</div></div>
       ${d.subtitle ? `<div class="muted" style="margin-bottom:8px">${esc(d.subtitle)}</div>` : ''}<div class="table-wrap"><table><thead><tr>${d.columns.map(c => `<th>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>
-      ${d.rows.map(r => `<tr${r.country === 'الإجمالي' ? ' style="font-weight:700;background:#fdf1b8"' : ''}>${d.columns.map(c => `<td>${esc(r[c.key] ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${d.columns.length}" class="empty">لا توجد بيانات لهذا التقرير</td></tr>`}</tbody></table></div></div>`;
+      ${d.rows.map(r => `<tr${r.country === 'الإجمالي' || r.date === 'الإجمالي' ? ' style="font-weight:700;background:#fdf1b8"' : r.flight === 'إجمالي اليوم' ? ' style="font-weight:700;background:#f1f6df"' : ''}>${d.columns.map(c => `<td>${esc(r[c.key] ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${d.columns.length}" class="empty">لا توجد بيانات لهذا التقرير</td></tr>`}</tbody></table></div></div>`;
     $('#pr').onclick = () => printNow($('#sheet')); $('#xl').onclick = () => download(`/reports/${R.type}?` + qs({ ...p, format: 'xlsx' }), `gaouk-${R.type}-${todayStr()}.xlsx`); $('#cv').onclick = () => download(`/reports/${R.type}?` + qs({ ...p, format: 'csv' }), `gaouk-${R.type}-${todayStr()}.csv`);
   }
+  $('#rall').onclick = () => { $('#rfrom').value = ''; $('#rto').value = ''; run(); };
   $('#run').onclick = run; await run();
 });
 
