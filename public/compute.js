@@ -138,7 +138,7 @@ const Compute = (() => {
       const vs = await rv(rpc, q); const R = range(q); const rows = [];
       for (const v of vs) {
         if (inRange(v.arrival_date, R)) rows.push({ date: v.arrival_date, type: 'وصول', time: v.arrival_time, name: v.full_name, country: v.country_name, flight: [v.airline, v.flight_no].filter(Boolean).join(' '), airport: v.airport, driver: v.transports.filter(t => t.kind === 'pickup').map(t => t.driver_name).join('، ') });
-        if (inRange(v.departure_date, R)) rows.push({ date: v.departure_date, type: 'مغادرة', time: '', name: v.full_name, country: v.country_name, flight: '', airport: '', driver: v.transports.filter(t => t.kind === 'dropoff').map(t => t.driver_name).join('، ') });
+        if (inRange(v.departure_date, R)) rows.push({ date: v.departure_date, type: 'مغادرة', time: v.departure_time, name: v.full_name, country: v.country_name, flight: '', airport: '', driver: v.transports.filter(t => t.kind === 'dropoff').map(t => t.driver_name).join('، ') });
       }
       rows.sort((a, b) => a.date.localeCompare(b.date) || a.type.localeCompare(b.type) || a.time.localeCompare(b.time));
       return { cols: [C('date', 'التاريخ', 12), C('type', 'النوع', 9), C('time', 'الوقت', 8), C('name', 'الاسم', 26), C('country', 'الدولة', 14), C('flight', 'الرحلة', 18), C('airport', 'المطار', 16), C('driver', 'السائق', 18)], rows, subtitle: rangeText(R) };

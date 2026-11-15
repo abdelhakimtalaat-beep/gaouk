@@ -102,7 +102,7 @@ App.view('visitors', async (page, ctx) => {
     $('#vlist').innerHTML = `<div class="muted small" style="margin-bottom:6px">${vs.length} سجل${vs.length >= 5000 ? ' (تم عرض أول 5000)' : ''}</div><div class="table-wrap"><table><thead><tr><th>الاسم</th><th>الدولة</th><th>الهاتف</th><th>العائلة / الفوج</th><th>الوصول</th><th>المغادرة</th><th>الرحلة</th><th>الغرفة</th><th>السائق</th><th></th></tr></thead><tbody>
       ${vs.map(v => `<tr class="${v.category === 'family_member' ? 'sub' : ''}"><td><a href="#" data-view="${v.id}"><b>${esc(v.full_name)}</b></a><br><span class="badge ${v.category === 'family_head' ? 'info' : ''}">${CAT[v.category]}${v.is_leader ? ' — قائد' : ''}${v.members_count ? ' (+' + v.members_count + ')' : ''}</span></td>
       <td>${esc(v.country_name)}</td><td><span class="ltr">${esc(v.phone)}</span></td><td>${esc(v.head_name || v.group_name || '')}${v.guide_name ? `<div class="muted small">المرشد: ${esc(v.guide_name)}</div>` : ''}</td>
-      <td>${v.arrival_date ? fmtDate(v.arrival_date, v.arrival_time) : '<span class="badge warn">ناقص</span>'}</td><td>${v.departure_date ? fmtDate(v.departure_date) : '<span class="badge warn">ناقص</span>'}</td>
+      <td>${v.arrival_date ? fmtDate(v.arrival_date, v.arrival_time) : '<span class="badge warn">ناقص</span>'}</td><td>${v.departure_date ? fmtDate(v.departure_date, v.departure_time) : '<span class="badge warn">ناقص</span>'}</td>
       <td>${esc([v.airline, v.flight_no].filter(Boolean).join(' '))}${v.airport ? `<div class="muted small">${esc(v.airport)}</div>` : ''}</td>
       <td>${v.bookings.length ? v.bookings.map(b => `<span class="badge free">${esc(roomLabel(b))}</span>`).join('<br>') : '<span class="badge gray">لم يُسكن</span>'}</td>
       <td>${v.transports.filter(t => t.kind === 'pickup').map(t => `${esc(t.driver_name)}<div class="muted small ltr">${esc(t.car_number)} · ${TASK_STATUS[t.status]}</div>`).join('') || '<span class="muted">—</span>'}</td>
@@ -132,7 +132,7 @@ App.view('visitors', async (page, ctx) => {
 
 function groupsTab(page, head, groups, writer, ctx) {
   page.innerHTML = head + `<div class="row" style="margin-bottom:10px">${writer ? '<button class="btn" id="addg">+ فوج جديد</button>' : ''}</div><div class="table-wrap"><table><thead><tr><th>الفوج</th><th>الدولة</th><th>القائد / المرشد</th><th>البلد</th><th>رجال / نساء / أطفال</th><th>العدد المعلن</th><th>المسجل</th><th>الوصول</th><th>المغادرة</th><th></th></tr></thead><tbody>
-    ${groups.map(g => `<tr><td><b>${esc(g.name)}</b></td><td>${esc(g.country_name)}</td><td>${esc(g.leader_name)}</td><td>${esc(g.city)}</td><td>${g.men_count} / ${g.women_count} / ${g.children_count}</td><td>${g.members_count}</td><td>${g.registered} ${g.members_count && g.registered < g.members_count ? '<span class="badge warn">ناقص</span>' : ''}</td><td>${fmtDate(g.arrival_date)}</td><td>${fmtDate(g.departure_date)}</td>
+    ${groups.map(g => `<tr><td><b>${esc(g.name)}</b></td><td>${esc(g.country_name)}</td><td>${esc(g.leader_name)}</td><td>${esc(g.city)}</td><td>${g.men_count} / ${g.women_count} / ${g.children_count}</td><td>${g.members_count}</td><td>${g.registered} ${g.members_count && g.registered < g.members_count ? '<span class="badge warn">ناقص</span>' : ''}</td><td>${fmtDate(g.arrival_date, g.arrival_time)}</td><td>${fmtDate(g.departure_date, g.departure_time)}</td>
     <td class="actions">${writer ? `<button class="btn sm sec" data-ge="${g.id}">تعديل</button> <button class="btn sm danger" data-gd="${g.id}">حذف</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="10" class="empty">لا توجد أفواج</td></tr>'}</tbody></table></div>
     <p class="muted small">لتسجيل أعضاء الفوج: أضف زائراً جديداً واختر التصنيف «عضو في فوج» ثم الفوج. العائلات تُسجَّل برب الأسرة وتابعيه من نموذج الزائر.</p>`;
   if (writer) $('#addg').onclick = () => groupForm(null, () => App.refresh());
@@ -151,7 +151,8 @@ function groupForm(g, done) {
     <div class="field"><label>عدد البالغين نساء</label><input type="number" min="0" name="women_count" value="${esc(g?.women_count || '')}"></div>
     <div class="field"><label>عدد الأطفال</label><input type="number" min="0" name="children_count" value="${esc(g?.children_count || '')}"></div>
     <div class="field"><label>الإجمالي</label><b id="gtot" class="badge ok" style="font-size:1rem">0</b></div>
-    <div class="field"><label>تاريخ الوصول</label><input type="date" name="arrival_date" value="${esc(g?.arrival_date)}"></div><div class="field"><label>تاريخ المغادرة</label><input type="date" name="departure_date" value="${esc(g?.departure_date)}"></div>
+    <div class="field"><label>تاريخ الوصول</label><input type="date" name="arrival_date" value="${esc(g?.arrival_date)}"></div><div class="field"><label>وقت الوصول</label><input type="time" name="arrival_time" value="${esc(g?.arrival_time)}"></div>
+    <div class="field"><label>تاريخ المغادرة</label><input type="date" name="departure_date" value="${esc(g?.departure_date)}"></div><div class="field"><label>وقت المغادرة</label><input type="time" name="departure_time" value="${esc(g?.departure_time)}"></div>
     <div class="field full"><label>ملاحظات</label><textarea name="notes">${esc(g?.notes)}</textarea></div></div></form>`;
   const gm = modal({ title: g ? 'تعديل فوج' : 'فوج جديد', width: 620, body, buttons: [{ label: 'حفظ', onClick: async m => {
     const f = $('#gf', m.el); if (!f.reportValidity()) return; const b = formData(f);
@@ -180,6 +181,7 @@ function visitorForm(v, groups, done, pre) {
       <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" name="is_leader" ${(v?.is_leader ?? pre.is_leader) ? 'checked' : ''}> قائد الفوج</label><button type="button" class="btn ghost sm" id="newg">+ إنشاء فوج جديد</button></div></div>
     <div id="travbox"><h3>مواعيد وبيانات الرحلة</h3><div class="fgrid"><div class="field"><label>تاريخ الوصول</label><input type="date" name="arrival_date" value="${esc(v?.arrival_date)}"></div>
     <div class="field"><label>وقت الوصول</label><input type="time" name="arrival_time" value="${esc(v?.arrival_time)}"></div><div class="field"><label>تاريخ المغادرة</label><input type="date" name="departure_date" value="${esc(v?.departure_date)}"></div>
+    <div class="field"><label>وقت المغادرة</label><input type="time" name="departure_time" value="${esc(v?.departure_time)}"></div>
     <div class="field"><label>رقم الرحلة</label><input name="flight_no" dir="ltr" style="text-align:right" value="${esc(v?.flight_no)}"></div><div class="field"><label>شركة الطيران</label><input name="airline" value="${esc(v?.airline)}"></div>
     <div class="field"><label>مطار الوصول</label><input name="airport" value="${esc(v?.airport)}"></div>
     <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" name="needs_transport" ${v ? (v.needs_transport ? 'checked' : '') : 'checked'}> يحتاج سيارة استقبال/توصيل</label></div></div></div>`}
@@ -259,7 +261,7 @@ async function visitorDetail(id, writer, done) {
   const v = (await api('GET', '/visitors/' + id)).visitor;
   const body = `<div class="fgrid"><div><b>الدولة:</b> ${esc(v.country_name)}</div><div><b>التصنيف:</b> ${CAT[v.category]}${v.is_leader ? ' (قائد الفوج)' : ''}</div><div><b>الهاتف:</b> <span class="ltr">${esc(v.phone) || '—'}</span></div>
     <div><b>المرشد:</b> ${esc(v.guide_name) || '—'}</div><div><b>${v.head_name ? 'رب الأسرة' : 'الفوج'}:</b> ${esc(v.head_name || v.group_name) || '—'}</div>
-    <div><b>الوصول:</b> ${fmtDate(v.arrival_date, v.arrival_time)}</div><div><b>المغادرة:</b> ${fmtDate(v.departure_date)}</div><div><b>الرحلة:</b> ${esc([v.airline, v.flight_no].filter(Boolean).join(' ')) || '—'}</div><div><b>المطار:</b> ${esc(v.airport) || '—'}</div>
+    <div><b>الوصول:</b> ${fmtDate(v.arrival_date, v.arrival_time)}</div><div><b>المغادرة:</b> ${fmtDate(v.departure_date, v.departure_time)}</div><div><b>الرحلة:</b> ${esc([v.airline, v.flight_no].filter(Boolean).join(' ')) || '—'}</div><div><b>المطار:</b> ${esc(v.airport) || '—'}</div>
     <div class="full"><b>ملاحظات:</b> ${esc(v.notes) || '—'}</div></div>
     ${v.members.length ? `<h3 style="margin-top:14px">أفراد الأسرة (${v.members.length})</h3><ul>${v.members.map(m => `<li>${esc(m.full_name)} ${m.relation ? `<span class="muted">(${esc(m.relation)})</span>` : ''}</li>`).join('')}</ul>` : ''}
     <h3 style="margin-top:14px">الغرفة المخصصة</h3>${v.bookings.length ? v.bookings.map(b => `<div class="badge free" style="margin:2px">${esc(roomLabel(b))} — ${b.from_date} ← ${b.to_date}</div>`).join('') : '<div class="muted">لم يتم التسكين بعد</div>'}
