@@ -117,8 +117,10 @@ App.showLogin = function (msg) {
   $('#root').innerHTML = `<div class="login-wrap"><div class="login-card">
     <div class="brand"><img class="logo-img" src="logo.png" alt="شعار جاؤوك"><h1>جاؤوك</h1></div>
     ${msg ? `<div class="alert warn">${esc(msg)}</div>` : ''}
-    <form id="af" autocomplete="off">
-      <p class="muted small tc" style="margin-top:0">جديد هنا؟ اضغط «طلب انضمام» بالأسفل. وإن كان لديك رمز تفعيل من المشرف (لجهاز جديد) فأدخل اسمك وهاتفك والرمز.</p>
+    <div id="newbox" class="tc"><p class="muted" style="margin-top:0">للدخول أرسل طلب انضمام باسمك ورقم هاتفك. وبمجرد موافقة المشرف يعمل التطبيق على هذا الجهاز تلقائياً.</p>
+      <button type="button" class="btn dark" id="joinbtn" style="width:100%;justify-content:center;padding:11px">طلب انضمام</button></div>
+    <form id="af" autocomplete="off" hidden>
+      <p class="muted small tc" style="margin-top:0">لديك رمز تفعيل من المشرف (لجهاز جديد)؟ أدخل اسمك وهاتفك والرمز.</p>
       <div class="field"><label for="an">الاسم</label><input id="an" name="name" required autocomplete="name"></div>
       <div class="field"><label for="ap">رقم الهاتف (مع مفتاح الدولة)</label><input id="ap" name="phone" type="tel" required dir="ltr" style="text-align:right" placeholder="+966500000000" autocomplete="tel"></div>
       <div class="field"><label for="ac">رمز التفعيل</label><input id="ac" name="code" required dir="ltr" maxlength="12" autocapitalize="characters" style="text-align:center;letter-spacing:4px;text-transform:uppercase;font-weight:700" autocomplete="off"></div>
@@ -130,10 +132,14 @@ App.showLogin = function (msg) {
       <div class="field"><label for="p">كلمة المرور</label><input id="p" name="password" type="password" autocomplete="current-password" required dir="ltr" style="text-align:right"></div>
       <div id="lerr" class="alert err" hidden></div>
       <button class="btn dark" style="width:100%;justify-content:center;padding:11px">تسجيل الدخول</button></form>
-    <div class="tc" style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--sand-d)"><span class="muted small">ليس لديك حساب؟</span> <button type="button" class="btn ghost sm" id="joinbtn">طلب انضمام</button>
-      <br><button type="button" class="btn ghost sm" id="toadmin">دخول المشرف العام بكلمة المرور</button></div></div></div>`;
+    <div class="tc" style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--sand-d)">
+      <button type="button" class="btn ghost sm" id="tocode">لدي رمز تفعيل (جهاز جديد)</button>
+      <button type="button" class="btn ghost sm" id="toadmin">دخول المشرف العام بكلمة المرور</button></div></div></div>`;
   $('#joinbtn').onclick = App.joinDialog;
-  $('#toadmin').onclick = () => { const h = !$('#lf').hidden; $('#lf').hidden = h; $('#af').hidden = !h; $('#toadmin').textContent = h ? 'دخول المشرف العام بكلمة المرور' : 'العودة إلى التفعيل برمز المشرف'; };
+  const mode = m => { $('#newbox').hidden = m !== 'new'; $('#af').hidden = m !== 'code'; $('#lf').hidden = m !== 'admin';
+    $('#tocode').textContent = m === 'code' ? 'العودة إلى طلب الانضمام' : 'لدي رمز تفعيل (جهاز جديد)'; $('#toadmin').textContent = m === 'admin' ? 'العودة إلى طلب الانضمام' : 'دخول المشرف العام بكلمة المرور'; };
+  $('#tocode').onclick = () => mode($('#af').hidden ? 'code' : 'new');
+  $('#toadmin').onclick = () => mode($('#lf').hidden ? 'admin' : 'new');
   $('#af').onsubmit = async e => {
     e.preventDefault(); const btn = $('button', e.target); btn.disabled = true;
     try { const r = await api('POST', '/activate', formData(e.target)); App.user = r.user; await App.boot(); App.offerBio(); }
