@@ -8,19 +8,19 @@ App.view('people', async (page, ctx) => {
   const groups = { requests: ['pending'], country: ['country_supervisor'], building: ['building_supervisor'], other: ['admin', 'event_manager', 'transport', 'catering'] };
   const list = users.filter(u => groups[tab].includes(u.role));
   const titles = { requests: 'طلبات الانضمام', country: 'مشرفو الدول', building: 'مشرفو المباني', other: 'بقية المستخدمين' };
-  page.innerHTML = `<div class="page-head"><h1>المستخدمون والمشرفون</h1><div class="grow"></div>${tab === 'requests' ? '' : `<button class="btn" id="add">+ ${tab === 'country' ? 'مشرف دولة جديد' : tab === 'building' ? 'مشرف مبنى جديد' : 'مستخدم جديد'}</button>`}</div>
+  page.innerHTML = `<div class="page-head"><h1>المستخدمون والمشرفون</h1><div class="grow"></div>${tab === 'requests' || tab === 'country' ? '' : `<button class="btn" id="add">+ ${tab === 'country' ? 'مشرف دولة جديد' : tab === 'building' ? 'مشرف مبنى جديد' : 'مستخدم جديد'}</button>`}</div>
     <div class="tabs">${Object.entries(titles).map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" onclick="location.hash='#/people/${k}'">${l} (${users.filter(u => groups[k].includes(u.role)).length})</button>`).join('')}</div>
     ${tab === 'country' ? '<div class="alert info">لكل دولة مشرف أو أكثر. يرى مشرف الدولة ويعدّل بيانات دولته فقط، ولا يطّلع على الدول الأخرى إلا إذا فوّضته هنا بدولة إضافية.</div>' : ''}
     ${tab === 'requests' ? `<div class="alert info">كل من يفتح رابط التطبيق ويسجّل اسمه ورقم هاتفه يظهر هنا. لا يستطيع الدخول قبل قبولك له وتحديد صلاحياته (مشرف عام، أو مشرف دولة/دول، أو مشرف مبنى/مبانٍ).</div>
     <div class="table-wrap"><table><thead><tr><th>الاسم</th><th>رقم الهاتف</th><th>اسم المستخدم</th><th>تاريخ الطلب</th><th></th></tr></thead><tbody>
     ${list.map(u => `<tr><td><b>${esc(u.name)}</b></td><td><span class="ltr">${esc(u.phone)}</span></td><td><span class="ltr">${esc(u.username)}</span></td><td>${fmtDate(String(u.created_at).slice(0, 10))}</td>
       <td class="actions"><button class="btn sm" data-a="${u.id}">قبول وتحديد الصلاحيات</button> <button class="btn sm danger" data-r="${u.id}">رفض</button></td></tr>`).join('') || '<tr><td colspan="5" class="empty">لا توجد طلبات انضمام معلقة</td></tr>'}</tbody></table></div>` : `
-    <div class="table-wrap"><table><thead><tr><th>الاسم</th><th>اسم المستخدم</th><th>الهاتف / البريد</th>${tab === 'country' ? '<th>الدولة المسؤول عنها</th>' : tab === 'building' ? '<th>المباني والأدوار</th>' : '<th>الدور</th>'}<th>الجهاز</th><th>الحالة</th><th></th></tr></thead><tbody>
+    <div class="table-wrap"><table><thead><tr><th>الاسم</th><th>اسم المستخدم</th><th>الهاتف / البريد</th>${tab === 'country' ? '<th>الدولة المسؤول عنها</th>' : tab === 'building' ? '<th>المباني والأدوار</th>' : '<th>الدور</th>'}<th>تاريخ الانضمام</th><th>الحالة</th><th></th></tr></thead><tbody>
     ${list.map(u => `<tr><td><b>${esc(u.name)}</b>${u.notes ? `<div class="muted small">${esc(u.notes)}</div>` : ''}</td><td><span class="ltr">${esc(u.username)}</span></td><td><span class="ltr">${esc(u.phone)}</span><div class="muted small ltr">${esc(u.email)}</div></td>
       <td>${tab === 'country' ? u.countries.map(c => `<span class="badge ${c.is_primary ? 'ok' : 'info'}">${esc(c.name)}${c.is_primary ? '' : ' (تفويض)'}</span>`).join(' ') : tab === 'building' ? floorsText(u.floors) : esc(App.roleLabels[u.role])}</td>
-      <td>${u.device === 'bound' ? '<span class="badge ok">مربوط بجهاز</span>' : u.device === 'code' ? '<span class="badge warn">بانتظار التفعيل</span>' : '<span class="badge info">بكلمة مرور</span>'}</td>
+      <td>${fmtDate(String(u.created_at).slice(0, 10))}</td>
       <td><span class="badge ${u.status === 'active' ? 'ok' : 'bad'}">${u.status === 'active' ? 'نشط' : 'موقوف'}</span></td>
-      <td class="actions"><button class="btn sm sec" data-e="${u.id}">تعديل</button> ${u.id !== App.user.id ? `<button class="btn sm gold" data-k="${u.id}">${u.device === 'none' ? 'رمز تفعيل' : 'إعادة ربط الجهاز'}</button> <button class="btn sm sec" data-t="${u.id}">${u.status === 'active' ? 'إيقاف' : 'تنشيط'}</button> <button class="btn sm danger" data-d="${u.id}">حذف</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">لا توجد حسابات</td></tr>'}</tbody></table></div>`}`;
+      <td class="actions"><button class="btn sm sec" data-e="${u.id}">تعديل</button> ${u.id !== App.user.id ? `<button class="btn sm sec" data-t="${u.id}">${u.status === 'active' ? 'إيقاف' : 'تنشيط'}</button> <button class="btn sm danger" data-d="${u.id}">حذف</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">لا توجد حسابات</td></tr>'}</tbody></table></div>`}`;
   const form = u => {
     const role0 = u ? u.role : (tab === 'country' ? 'country_supervisor' : tab === 'building' ? 'building_supervisor' : 'event_manager');
     const roleOpts = tab === 'other' ? Object.entries(App.roleLabels).filter(([k]) => groups.other.includes(k)) : [[role0, App.roleLabels[role0]]];
@@ -41,15 +41,6 @@ App.view('people', async (page, ctx) => {
     } }, { label: 'إلغاء', cls: 'sec', close: true }] });
     $('#rl', m.el).onchange = e => { $('#cbox', m.el).hidden = e.target.value !== 'country_supervisor'; $('#fbox', m.el).hidden = e.target.value !== 'building_supervisor'; };
   };
-  // نافذة رمز التفعيل: نص جاهز للإرسال عبر واتساب أو النسخ
-  const showCode = (u, r) => {
-    const url = location.origin + location.pathname;
-    const msg = `مرحباً ${u.name}\nتم قبولك في تطبيق جاؤوك.\nافتح الرابط: ${url}\nاكتب اسمك ورقم هاتفك (${u.phone}) ورمز التفعيل: ${r.code}\nالرمز صالح ${r.expires_days} أيام ويعمل مرة واحدة على جهاز واحد.`;
-    const wa = 'https://wa.me/' + String(u.username).replace(/\D/g, '') + '?text=' + encodeURIComponent(msg);
-    const m = modal({ title: 'رمز التفعيل', width: 500, body: `<div class="alert info" style="margin-top:0">رمز <b>${esc(u.name)}</b>: <b class="ltr" style="font-size:1.5rem;letter-spacing:4px">${esc(r.code)}</b><br><span class="small">يظهر مرة واحدة. صالح ${r.expires_days} أيام، ويعمل مرة واحدة على جهاز واحد، وإصدار رمز جديد يُبطل الجهاز القديم.</span></div><div class="field"><label>رسالة جاهزة للإرسال</label><textarea id="cmsg" readonly style="min-height:130px">${esc(msg)}</textarea></div>`,
-      buttons: [{ label: 'إرسال عبر واتساب', onClick: () => window.open(wa, '_blank', 'noopener') }, { label: 'نسخ الرسالة', cls: 'sec', onClick: async () => { try { await navigator.clipboard.writeText(msg); toast('تم النسخ'); } catch (_) { $('#cmsg', m.el).select(); toast('حدّد النص وانسخه يدوياً', 'warn'); } } }, { label: 'إغلاق', cls: 'sec', close: true }] });
-    App.refresh();
-  };
   const approve = u => {
     const roles = [['admin', 'مشرف عام — يتحكم في كامل التطبيق'], ['country_supervisor', 'مشرف دولة — يختار دولة أو أكثر'], ['building_supervisor', 'مشرف مبنى — يختار مبنى أو أكثر'], ['event_manager', 'مدير مناسبات'], ['transport', 'مسؤول النقل'], ['catering', 'مسؤول الإعاشة']];
     const body = `<form id="af"><div class="alert info" style="margin-top:0"><b>${esc(u.name)}</b> — <span class="ltr">${esc(u.phone)}</span></div>
@@ -62,16 +53,14 @@ App.view('people', async (page, ctx) => {
       if (role === 'country_supervisor') { const ids = $$('input[name="cids[]"]:checked', f).map(x => +x.value); if (!ids.length) return toast('اختر دولة واحدة على الأقل', 'warn'); b.country_id = ids[0]; b.extra_country_ids = ids.slice(1); }
       if (role === 'building_supervisor') { const fl = $$('input[name="bids[]"]:checked', f).flatMap(x => x.dataset.f.split(',').filter(Boolean).map(Number)); if (!fl.length) return toast('اختر مبنى واحداً على الأقل (له أدوار)', 'warn'); b.floor_ids = fl; }
       await api('PUT', '/users/' + u.id, b); mm.close(); App.refresh();
-      if (u.device === 'bound') toast('تم القبول. سيعمل التطبيق تلقائياً على جهاز ' + u.name + ' دون رمز', 'ok');
-      else showCode(u, await api('POST', '/issue-code', { user_id: u.id }));   // طلب قديم بلا جهاز مربوط
+      toast('تم القبول. سيعمل التطبيق تلقائياً على جهاز ' + u.name);
     } }, { label: 'إلغاء', cls: 'sec', close: true }] });
     $('#arl', m.el).onchange = e => { $('#acb', m.el).hidden = e.target.value !== 'country_supervisor'; $('#abb', m.el).hidden = e.target.value !== 'building_supervisor'; };
   };
   if ($('#add')) $('#add').onclick = () => form();
   page.onclick = async e => {
-    const b = e.target.closest('button'); if (!b) return; const id = +(b.dataset.e || b.dataset.t || b.dataset.d || b.dataset.a || b.dataset.r || b.dataset.k); const u = users.find(x => x.id === id); if (!u) return;
+    const b = e.target.closest('button'); if (!b) return; const id = +(b.dataset.e || b.dataset.t || b.dataset.d || b.dataset.a || b.dataset.r); const u = users.find(x => x.id === id); if (!u) return;
     if (b.dataset.a) return approve(u);
-    if (b.dataset.k) { if (u.device === 'bound' && !(await confirmBox(`سيُبطَل جهاز «${u.name}» الحالي ويلزمه الرمز الجديد على جهازه الجديد. متابعة؟`, { okText: 'إصدار رمز جديد' }))) return; return showCode(u, await api('POST', '/issue-code', { user_id: u.id })); }
     if (b.dataset.r) { if (await confirmBox(`رفض طلب «${u.name}»؟ سيُحذف الطلب ولن يستطيع الدخول.`, { danger: true, okText: 'رفض' })) { await api('DELETE', '/users/' + id); toast('تم رفض الطلب'); App.refresh(); } return; }
     if (b.dataset.e) form(u);
     if (b.dataset.t) { await api('PUT', '/users/' + id, { ...u, country_id: u.countries.find(c => c.is_primary)?.id, extra_country_ids: u.countries.filter(c => !c.is_primary).map(c => c.id), floor_ids: u.floors.map(f => f.id), status: u.status === 'active' ? 'suspended' : 'active' }); toast(u.status === 'active' ? 'تم إيقاف الحساب' : 'تم تنشيط الحساب'); App.refresh(); }

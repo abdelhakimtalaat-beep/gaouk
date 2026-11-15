@@ -119,13 +119,6 @@ App.showLogin = function (msg) {
     ${msg ? `<div class="alert warn">${esc(msg)}</div>` : ''}
     <div id="newbox" class="tc"><p class="muted" style="margin-top:0">للدخول أرسل طلب انضمام باسمك ورقم هاتفك. وبمجرد موافقة المشرف يعمل التطبيق على هذا الجهاز تلقائياً.</p>
       <button type="button" class="btn dark" id="joinbtn" style="width:100%;justify-content:center;padding:11px">طلب انضمام</button></div>
-    <form id="af" autocomplete="off" hidden>
-      <p class="muted small tc" style="margin-top:0">لديك رمز تفعيل من المشرف (لجهاز جديد)؟ أدخل اسمك وهاتفك والرمز.</p>
-      <div class="field"><label for="an">الاسم</label><input id="an" name="name" required autocomplete="name"></div>
-      <div class="field"><label for="ap">رقم الهاتف (مع مفتاح الدولة)</label><input id="ap" name="phone" type="tel" required dir="ltr" style="text-align:right" placeholder="+966500000000" autocomplete="tel"></div>
-      <div class="field"><label for="ac">رمز التفعيل</label><input id="ac" name="code" required dir="ltr" maxlength="12" autocapitalize="characters" style="text-align:center;letter-spacing:4px;text-transform:uppercase;font-weight:700" autocomplete="off"></div>
-      <div id="aerr" class="alert err" hidden></div>
-      <button class="btn dark" style="width:100%;justify-content:center;padding:11px">تفعيل الجهاز والدخول</button></form>
     <form id="lf" autocomplete="on" hidden>
       <p class="muted small tc" style="margin-top:0">دخول المشرف العام بكلمة المرور</p>
       <div class="field"><label for="u">اسم المستخدم</label><input id="u" name="username" type="text" autocomplete="username" required dir="ltr" style="text-align:right"></div>
@@ -133,18 +126,10 @@ App.showLogin = function (msg) {
       <div id="lerr" class="alert err" hidden></div>
       <button class="btn dark" style="width:100%;justify-content:center;padding:11px">تسجيل الدخول</button></form>
     <div class="tc" style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--sand-d)">
-      <button type="button" class="btn ghost sm" id="tocode">لدي رمز تفعيل (جهاز جديد)</button>
       <button type="button" class="btn ghost sm" id="toadmin">دخول المشرف العام بكلمة المرور</button></div></div></div>`;
   $('#joinbtn').onclick = App.joinDialog;
-  const mode = m => { $('#newbox').hidden = m !== 'new'; $('#af').hidden = m !== 'code'; $('#lf').hidden = m !== 'admin';
-    $('#tocode').textContent = m === 'code' ? 'العودة إلى طلب الانضمام' : 'لدي رمز تفعيل (جهاز جديد)'; $('#toadmin').textContent = m === 'admin' ? 'العودة إلى طلب الانضمام' : 'دخول المشرف العام بكلمة المرور'; };
-  $('#tocode').onclick = () => mode($('#af').hidden ? 'code' : 'new');
+  const mode = m => { $('#newbox').hidden = m !== 'new'; $('#lf').hidden = m !== 'admin'; $('#toadmin').textContent = m === 'admin' ? 'العودة إلى طلب الانضمام' : 'دخول المشرف العام بكلمة المرور'; };
   $('#toadmin').onclick = () => mode($('#lf').hidden ? 'admin' : 'new');
-  $('#af').onsubmit = async e => {
-    e.preventDefault(); const btn = $('button', e.target); btn.disabled = true;
-    try { const r = await api('POST', '/activate', formData(e.target)); App.user = r.user; await App.boot(); App.offerBio(); }
-    catch (err) { const b = $('#aerr'); b.hidden = false; b.textContent = err.message; btn.disabled = false; }
-  };
   $('#lf').onsubmit = async e => {
     e.preventDefault(); const f = formData(e.target); const btn = $('button', e.target); btn.disabled = true;
     try { const r = await api('POST', '/login', f); App.user = r.user; await App.boot(); }
@@ -174,10 +159,9 @@ const Bio = {
       $('#root').innerHTML = `<div class="login-wrap"><div class="login-card tc"><div class="brand"><img class="logo-img" src="logo.png" alt="شعار جاؤوك"><h1>جاؤوك</h1></div>
         <p class="muted">التطبيق مقفل. افتحه ببصمتك أو وجهك.</p><div id="gerr" class="alert err" hidden></div>
         <button class="btn dark" id="gbtn" style="width:100%;justify-content:center;padding:12px">فتح بالبصمة / الوجه</button>
-        <p style="margin-top:16px"><button class="btn ghost sm" id="gx">تعذّر الفتح؟ إلغاء القفل وطلب رمز جديد</button></p></div></div>`;
+      </div></div>`;
       const go = async () => { try { await Bio.verify(); res(); } catch (_) { $('#gerr').hidden = false; $('#gerr').textContent = 'لم يتم التحقق. حاول مرة أخرى'; } };
       $('#gbtn').onclick = go;
-      $('#gx').onclick = async () => { if (await confirmBox('سيُلغى القفل وربط هذا الجهاز، وتحتاج رمز تفعيل جديداً من المشرف. متابعة؟', { danger: true, okText: 'إلغاء القفل' })) { Bio.disable(); await SB.logout(); location.reload(); } };
       go();
     });
   },
@@ -235,7 +219,7 @@ App.start = async function () {
   const had = SB.hasDevice();
   if (Bio.enabled() && SB.hasDevice()) await Bio.gate();
   try { const r = await api('GET', '/me'); App.user = r.user; App.roleLabels = r.roles; await App.boot(); }
-  catch (e) { if (SB.hasDevice() && /قيد المراجعة/.test(e.message || '')) return App.showPending(); App.showLogin(had && !SB.hasDevice() ? 'أُلغي ربط هذا الجهاز أو انتهت صلاحيته. اطلب رمز تفعيل جديداً من المشرف' : undefined); }
+  catch (e) { if (SB.hasDevice() && /قيد المراجعة/.test(e.message || '')) return App.showPending(); App.showLogin(had && !SB.hasDevice() ? 'أُلغي ربط هذا الجهاز أو انتهت صلاحيته. تواصل مع المشرف' : undefined); }
 };
 App.boot = async function () {
   const [ev, co, me] = await Promise.all([api('GET', '/events'), api('GET', '/countries'), api('GET', '/me')]);
@@ -257,11 +241,10 @@ App.buildShell = function () {
     <div class="main"><header class="top"><button class="btn sec menu-btn" id="mb" aria-label="القائمة">☰</button>
       <div class="row"><span class="muted small">المناسبة:</span><select id="evsel" aria-label="المناسبة الحالية"></select></div><div class="grow"></div>
       <div class="user-chip"><span class="av">${esc(u.name.slice(0, 1))}</span><div><div style="font-weight:700;line-height:1.1">${esc(u.name)}</div><div class="muted small">${esc(App.roleLabels[u.role])}${u.role === 'country_supervisor' ? ' — ' + esc(App.countries.map(c => c.name).join('، ')) : ''}</div></div></div>
-      <button class="btn sec sm" id="lo">خروج</button></header><main class="page" id="page"></main></div></div>`;
+      ${SB.hasDevice() ? '' : '<button class="btn sec sm" id="lo">خروج</button>'}</header><main class="page" id="page"></main></div></div>`;
   App.fillEventSelect();
   $('#evsel').onchange = e => { App.eventId = parseInt(e.target.value, 10) || null; localStorage.setItem('gaouk_event', App.eventId || ''); App.route(); };
-  $('#lo').onclick = async () => {
-    if (SB.hasDevice() && !(await confirmBox('تسجيل الخروج يلغي ربط هذا الجهاز، وتحتاج رمز تفعيل جديداً من المشرف للدخول مرة أخرى. متابعة؟', { danger: true, okText: 'خروج' }))) return;
+  if ($('#lo')) $('#lo').onclick = async () => {
     try { await api('POST', '/logout', {}); } catch (_) {} Bio.disable(); App.user = null; App.showLogin();
   };
   $('#mb').onclick = () => $('#side').classList.toggle('open');
