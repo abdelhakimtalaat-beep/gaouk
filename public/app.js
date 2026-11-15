@@ -1,6 +1,6 @@
 'use strict';
-// عنوان التطبيق بخط كوفي هندسي مزخرف (رسم متجه يتلوّن حسب الخلفية)
-const WORDMARK = `<svg class="wordmark" viewBox="-2.5 -5.4 29.5 13.6" fill="none" stroke-linejoin="miter" stroke-linecap="butt" role="img" aria-label="جاؤوك"><defs><linearGradient id="wg" x1="0" x2="1"><stop offset="0" stop-color="#14532d"/><stop offset="1" stop-color="#2a8a4f"/></linearGradient><g id="wl" stroke-width=".85"><path d="M1,-3.4 V2.4 M.58,2 H5.6"/><path d="M7.6,0 H10.4 V2.7 H7.6 Z"/><path d="M10.4,2.7 V4.9 H7.2"/><path d="M13,0 H15.8 V2.7 H13 Z"/><path d="M15.8,2.7 V4.9 H12.6"/><path d="M18.6,-3.4 V2.4 M18.18,2 H24.2 M23.8,2 V4.9 H20.4"/></g></defs><use href="#wl" stroke="#e3b72f" transform="translate(.3,.3)"/><use class="wmain" href="#wl" stroke="url(#wg)"/><path d="M2.9,-.4 L4.5,.9 M13.6,-1.8 L15.2,-2.8" stroke="#14532d" stroke-width=".7"/><g fill="#e3b72f"><rect x="8.15" y=".55" width="1.7" height="1.6"/><rect x="13.55" y=".55" width="1.7" height="1.6"/><rect x="21.35" y="5.7" width="1" height="1" transform="rotate(45 21.85 6.2)"/><rect x="5.6" y="-2.2" width=".8" height=".8" transform="rotate(45 6 -1.8)"/><rect x="10.9" y="-3.1" width=".8" height=".8" transform="rotate(45 11.3 -2.7)"/><rect x="16.2" y="-2.2" width=".8" height=".8" transform="rotate(45 16.6 -1.8)"/></g><path d="M-2,7.3 H26" stroke="#14532d" stroke-width=".26"/><path d="M-2,7.8 H26" stroke="#e3b72f" stroke-width=".26"/><g fill="#e3b72f"><rect x="-2.4" y="7" width=".8" height=".8" transform="rotate(45 -2 7.4)"/><rect x="12" y="7" width=".8" height=".8" transform="rotate(45 12.4 7.4)"/><rect x="26.1" y="7" width=".8" height=".8" transform="rotate(45 26.5 7.4)"/></g></svg>`;
+// عنوان التطبيق: خط الشعار المعتمد (صورة شفافة بلونين: داكن للخلفيات الفاتحة، وفاتح للقائمة الجانبية)
+const WORDMARK = '<img class="wordmark" src="title.png" alt="جاؤوك">', WORDMARK_LIGHT = '<img class="wordmark" src="title-light.png" alt="جاؤوك">';
 // «جاؤوك» — النواة: الاتصال بالخادم، الصلاحيات، الهيكل العام، أدوات مشتركة
 const App = { user: null, roleLabels: {}, events: [], eventId: null, countries: [], views: {}, nav: [], cache: {} };
 
@@ -238,7 +238,7 @@ App.visibleNav = () => App.nav.filter(n => !n[3] || n[3].includes(App.user.role)
 App.buildShell = function () {
   const u = App.user;
   $('#root').innerHTML = `<div class="app"><aside class="side" id="side">
-    <div class="brand"><h1 class="wm">${WORDMARK}<span class="sr">جاؤوك</span></h1></div>
+    <div class="brand"><h1 class="wm">${WORDMARK_LIGHT}<span class="sr">جاؤوك</span></h1></div>
     <nav id="nav">${App.visibleNav().map(n => `<a data-id="${n[0]}" href="#/${n[0]}">${icon(n[2])}<span>${n[1]}</span></a>`).join('')}</nav>
     <div class="foot">${esc(App.roleLabels[u.role])}</div></aside>
     <div class="main"><header class="top"><button class="btn sec menu-btn" id="mb" aria-label="القائمة">☰</button>

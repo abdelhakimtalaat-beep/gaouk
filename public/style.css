@@ -240,12 +240,10 @@ td{border-bottom:1px solid #edf1de}
 
 /* عنوان «جاؤوك» بالخط الكوفي المزخرف */
 .brand h1.wm{line-height:0;font-size:0;margin:0}
-.wordmark{display:block;margin:0 auto;height:auto;overflow:visible}
-.login-card .wordmark{width:min(300px,82%)}
-.side .wordmark{width:176px}
-.side .wordmark .wmain{stroke:#ffe08a}
+.wordmark{display:block;margin:0 auto;height:auto;max-width:100%}
+.login-card .wordmark{width:min(330px,86%)}
+.side .wordmark{width:190px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-@media print{.side .wordmark .wmain{stroke:#14532d}}
 
 /* الكروكي على الهاتف: بطاقات غرف كبيرة مرتبة بدل المربعات الصغيرة، لتظهر الأسرّة والعدد كاملة */
 @media (max-width:900px){
