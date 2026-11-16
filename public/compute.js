@@ -111,8 +111,8 @@ const Compute = (() => {
   const rv = (rpc, q, country) => loadVisitors(rpc, { event_id: q.event_id, country_id: country || q.country_id });
   const REPORTS = {
     visitors_all: { roles: ['admin', 'event_manager', 'country_supervisor', 'transport', 'catering'], title: 'كشف كامل بأسماء الزائرين', async build(rpc, u, q) {
-      const cols = [C('i', '#', 5), C('name', 'الاسم', 26), C('country', 'الدولة', 14), C('cat', 'التصنيف', 13), C('rel', 'رب الأسرة / الفوج', 22), C('phone', 'الهاتف', 17), C('ad', 'الوصول', 12), C('at', 'الوقت', 8), C('dd', 'المغادرة', 12), C('flight', 'الرحلة', 14), C('airport', 'المطار', 14), C('room', 'الغرفة', 28), C('driver', 'السائق', 18), C('notes', 'ملاحظات', 20)];
-      const rows = (await rv(rpc, q)).map((v, i) => ({ i: i + 1, name: v.full_name, country: v.country_name, cat: CAT_LABELS[v.category], rel: v.head_name || v.group_name || '', phone: v.phone, ad: v.arrival_date, at: v.arrival_time, dd: v.departure_date,
+      const cols = [C('i', '#', 5), C('name', 'الاسم', 26), C('country', 'الدولة', 14), C('cat', 'التصنيف', 13), C('rel', 'رب الأسرة / الفوج', 22), C('phone', 'الهاتف', 17), C('ad', 'الوصول', 12), C('at', 'الوقت', 8), C('dd', 'المغادرة', 12), C('dt', 'وقت المغادرة', 10), C('flight', 'الرحلة', 14), C('airport', 'المطار', 14), C('room', 'الغرفة', 28), C('driver', 'السائق', 18), C('notes', 'ملاحظات', 20)];
+      const rows = (await rv(rpc, q)).map((v, i) => ({ i: i + 1, name: v.full_name, country: v.country_name, cat: CAT_LABELS[v.category], rel: v.head_name || v.group_name || '', phone: v.phone, ad: v.arrival_date, at: v.arrival_time, dd: v.departure_date, dt: v.departure_time,
         flight: [v.airline, v.flight_no].filter(Boolean).join(' '), airport: v.airport, room: roomText(v.bookings), driver: v.transports.filter(t => t.kind === 'pickup').map(t => `${t.driver_name} (${t.car_number})`).join('، '), notes: [v.diet_notes, v.notes].filter(Boolean).join(' | ') }));
       return { cols, rows };
     } },
