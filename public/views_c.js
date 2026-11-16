@@ -106,11 +106,11 @@ App.view('reports', async (page, ctx) => {
   async function run() {
     R.country_id = $('#rcountry').value; R.date = $('#rdate').value; R.from = $('#rfrom').value; R.to = $('#rto').value; R.building_id = $('#rbld').value; const p = params();
     const d = await api('GET', `/reports/${R.type}?` + qs(p)); if (ctx.stale()) return;
-    $('#out').innerHTML = `<div class="card" id="sheet"><div class="row no-print" style="margin-bottom:10px"><h2 style="margin:0">${esc(d.title)}</h2><span class="badge">${d.rows.length} سطر</span><div class="grow"></div><button class="btn sec" id="pr">طباعة / PDF</button><button class="btn sec" id="xl">تصدير Excel</button><button class="btn sec" id="cv">CSV</button></div>
+    $('#out').innerHTML = `<div class="card" id="sheet"><div class="row no-print" style="margin-bottom:10px"><h2 style="margin:0">${esc(d.title)}</h2><span class="badge">${d.rows.length} سطر</span><div class="grow"></div><button class="btn" id="pdf">PDF — فتح ومشاركة</button><button class="btn sec" id="pr">طباعة</button><button class="btn sec" id="xl">تصدير Excel</button><button class="btn sec" id="cv">CSV</button></div>
       <div class="print-only tc" style="margin-bottom:10px"><h2>جاؤوك — ${esc(d.title)}</h2><div>${esc(d.event)} ${d.subtitle ? '— ' + esc(d.subtitle) : ''}</div><div class="small">أُعدّ بواسطة ${esc(d.generated_by)} — ${new Date(d.generated_at).toLocaleString('ar-EG')}</div></div>
       ${d.subtitle ? `<div class="muted" style="margin-bottom:8px">${esc(d.subtitle)}</div>` : ''}<div class="table-wrap"><table><thead><tr>${d.columns.map(c => `<th>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>
       ${d.rows.map(r => `<tr${r.country === 'الإجمالي' || r.date === 'الإجمالي' ? ' style="font-weight:700;background:#fdf1b8"' : r.flight === 'إجمالي اليوم' ? ' style="font-weight:700;background:#f1f6df"' : ''}>${d.columns.map(c => `<td>${esc(r[c.key] ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${d.columns.length}" class="empty">لا توجد بيانات لهذا التقرير</td></tr>`}</tbody></table></div></div>`;
-    $('#pr').onclick = () => printNow($('#sheet')); $('#xl').onclick = () => download(`/reports/${R.type}?` + qs({ ...p, format: 'xlsx' }), `gaouk-${R.type}-${todayStr()}.xlsx`); $('#cv').onclick = () => download(`/reports/${R.type}?` + qs({ ...p, format: 'csv' }), `gaouk-${R.type}-${todayStr()}.csv`);
+    $('#pr').onclick = () => printNow($('#sheet')); $('#pdf').onclick = () => sharePdf(d, `gaouk-${R.type}-${todayStr()}.pdf`); $('#xl').onclick = () => download(`/reports/${R.type}?` + qs({ ...p, format: 'xlsx' }), `gaouk-${R.type}-${todayStr()}.xlsx`); $('#cv').onclick = () => download(`/reports/${R.type}?` + qs({ ...p, format: 'csv' }), `gaouk-${R.type}-${todayStr()}.csv`);
   }
   $('#rall').onclick = () => { $('#rfrom').value = ''; $('#rto').value = ''; run(); };
   $('#run').onclick = run; await run();
@@ -148,3 +148,22 @@ App.view('system', async page => {
     catch (e) { toast(e.message, 'err'); }
   };
 });
+
+/* PDF حقيقي من التقرير المعروض: يُفتح مباشرة ويمكن مشاركته (واتساب أو أي تطبيق) أو تنزيله */
+async function sharePdf(d, name) {
+  const w = window.open('', '_blank'); // يُفتح قبل الانتظار كي لا تحجبه المتصفحات
+  const btn = $('#pdf'); const old = btn.textContent; btn.disabled = true;
+  try {
+    const blob = await Pdf.report(d, (i, n) => { btn.textContent = `جارٍ التجهيز ${i}/${n}…`; });
+    const url = URL.createObjectURL(blob); const file = new File([blob], name, { type: 'application/pdf' });
+    if (w) { try { w.location.href = url; } catch (_) {} }
+    const canShare = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+    const buttons = [];
+    if (canShare) buttons.push({ label: 'مشاركة (واتساب وغيره)', onClick: async m => { try { await navigator.share({ files: [file], title: d.title }); m.close(); } catch (e) { if (e.name !== 'AbortError') toast('تعذّرت المشاركة، استخدم «فتح» أو «تنزيل»', 'warn'); } } });
+    buttons.push({ label: 'فتح PDF', cls: canShare ? 'sec' : '', onClick: () => { window.open(url, '_blank'); } });
+    buttons.push({ label: 'تنزيل', cls: 'sec', onClick: () => { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); } });
+    buttons.push({ label: 'إغلاق', cls: 'sec', close: true });
+    modal({ title: 'ملف PDF جاهز', width: 460, body: `<div class="alert ok">تم تجهيز «${esc(d.title)}» (${d.rows.length} سطر).${w ? ' فُتح في تبويب جديد.' : ''}</div><p class="muted small">${canShare ? 'اضغط «مشاركة» لاختيار واتساب أو أي تطبيق آخر.' : 'من المتصفح المفتوح يمكنك مشاركة الملف أو حفظه. «تنزيل» يحفظه على جهازك لترسله لمن تشاء.'}</p>`, buttons });
+  } catch (e) { if (w) w.close(); toast(e.message || 'تعذّر إنشاء PDF', 'err'); }
+  finally { btn.disabled = false; btn.textContent = old; }
+}
