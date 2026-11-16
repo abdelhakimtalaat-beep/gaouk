@@ -4,17 +4,25 @@
 /* ================= المستخدمون والمشرفون ================= */
 App.view('people', async (page, ctx) => {
   const [{ users }, { buildings }] = await Promise.all([api('GET', '/users'), api('GET', '/structure')]); if (ctx.stale()) return;
-  const tab = ctx.sub || (users.some(u => u.status === 'pending') ? 'requests' : 'country');
-  const groups = { requests: ['pending'], country: ['country_supervisor'], building: ['building_supervisor'], other: ['admin', 'event_manager', 'transport', 'catering'] };
-  const list = users.filter(u => groups[tab].includes(u.role));
-  const titles = { requests: 'طلبات الانضمام', country: 'مشرفو الدول', building: 'مشرفو المباني', other: 'بقية المستخدمين' };
-  page.innerHTML = `<div class="page-head"><h1>المستخدمون والمشرفون</h1><div class="grow"></div>${tab === 'requests' || tab === 'country' ? '' : `<button class="btn" id="add">+ ${tab === 'country' ? 'مشرف دولة جديد' : tab === 'building' ? 'مشرف مبنى جديد' : 'مستخدم جديد'}</button>`}</div>
-    <div class="tabs">${Object.entries(titles).map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" onclick="location.hash='#/people/${k}'">${l} (${users.filter(u => groups[k].includes(u.role)).length})</button>`).join('')}</div>
+  const tab = ctx.sub || 'all';
+  const groups = { all: null, requests: ['pending'], country: ['country_supervisor'], building: ['building_supervisor'], other: ['admin', 'event_manager', 'transport', 'catering'] };
+  const inTab = (u, k) => k === 'all' ? true : k === 'requests' ? u.status === 'pending' : u.status !== 'pending' && groups[k].includes(u.role);
+  const list = users.filter(u => inTab(u, tab));
+  const lastSeen = ts => { if (!ts) return '<span class="muted small">لم يستخدمه بعد</span>'; const d = new Date(ts), z = n => String(n).padStart(2, '0'); return fmtDate(`${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`, `${z(d.getHours())}:${z(d.getMinutes())}`); };
+  const stBadge = u => u.status === 'pending' ? '<span class="badge warn">قيد المراجعة</span>' : u.status === 'active' ? '<span class="badge ok">نشط</span>' : '<span class="badge bad">موقوف</span>';
+  const titles = { all: 'جميع الأشخاص', requests: 'طلبات الانضمام', country: 'مشرفو الدول', building: 'مشرفو المباني', other: 'بقية المستخدمين' };
+  page.innerHTML = `<div class="page-head"><h1>المستخدمون والمشرفون</h1><div class="grow"></div>${tab === 'requests' || tab === 'country' || tab === 'all' ? '' : `<button class="btn" id="add">+ ${tab === 'country' ? 'مشرف دولة جديد' : tab === 'building' ? 'مشرف مبنى جديد' : 'مستخدم جديد'}</button>`}</div>
+    <div class="tabs">${Object.entries(titles).map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" onclick="location.hash='#/people/${k}'">${l} (${users.filter(u => inTab(u, k)).length})</button>`).join('')}</div>
     ${tab === 'country' ? '<div class="alert info">لكل دولة مشرف أو أكثر. يرى مشرف الدولة ويعدّل بيانات دولته فقط، ولا يطّلع على الدول الأخرى إلا إذا فوّضته هنا بدولة إضافية.</div>' : ''}
+    ${tab === 'all' ? `<div class="alert info">كل من طلب الانضمام يظهر هنا، سواء قُبل أو لم يُقبل بعد، مع تاريخ انضمامه وآخر مرة استخدم فيها التطبيق. من هنا تقبل الطلب أو تغيّر الصلاحية أو توقف الحساب أو تحذفه.</div>
+    <div class="table-wrap"><table><thead><tr><th>الاسم</th><th>رقم الهاتف</th><th>الصلاحية</th><th>الحالة</th><th>تاريخ الانضمام</th><th>آخر استخدام</th><th></th></tr></thead><tbody>
+    ${list.map(u => `<tr><td><b>${esc(u.name)}</b></td><td><span class="ltr">${esc(u.phone)}</span></td><td>${u.status === 'pending' ? '<span class="muted">—</span>' : esc(App.roleLabels[u.role]) + (u.role === 'country_supervisor' && u.countries.length ? `<div class="muted small">${u.countries.map(c => esc(c.name)).join('، ')}</div>` : '')}</td><td>${stBadge(u)}</td>
+      <td>${fmtDate(String(u.created_at).slice(0, 10))}</td><td>${lastSeen(u.last_seen_at)}</td>
+      <td class="actions">${u.status === 'pending' ? `<button class="btn sm" data-a="${u.id}">قبول وتحديد الصلاحيات</button> <button class="btn sm danger" data-r="${u.id}">رفض</button>` : `<button class="btn sm sec" data-e="${u.id}">تغيير الصلاحية</button> ${u.id !== App.user.id ? `<button class="btn sm sec" data-t="${u.id}">${u.status === 'active' ? 'إيقاف' : 'تنشيط'}</button> <button class="btn sm danger" data-d="${u.id}">حذف</button>` : ''}`}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">لا يوجد أشخاص</td></tr>'}</tbody></table></div>` : ''}
     ${tab === 'requests' ? `<div class="alert info">كل من يفتح رابط التطبيق ويسجّل اسمه ورقم هاتفه يظهر هنا. لا يستطيع الدخول قبل قبولك له وتحديد صلاحياته (مشرف عام، أو مشرف دولة/دول، أو مشرف مبنى/مبانٍ).</div>
     <div class="table-wrap"><table><thead><tr><th>الاسم</th><th>رقم الهاتف</th><th>اسم المستخدم</th><th>تاريخ الطلب</th><th></th></tr></thead><tbody>
     ${list.map(u => `<tr><td><b>${esc(u.name)}</b></td><td><span class="ltr">${esc(u.phone)}</span></td><td><span class="ltr">${esc(u.username)}</span></td><td>${fmtDate(String(u.created_at).slice(0, 10))}</td>
-      <td class="actions"><button class="btn sm" data-a="${u.id}">قبول وتحديد الصلاحيات</button> <button class="btn sm danger" data-r="${u.id}">رفض</button></td></tr>`).join('') || '<tr><td colspan="5" class="empty">لا توجد طلبات انضمام معلقة</td></tr>'}</tbody></table></div>` : `
+      <td class="actions"><button class="btn sm" data-a="${u.id}">قبول وتحديد الصلاحيات</button> <button class="btn sm danger" data-r="${u.id}">رفض</button></td></tr>`).join('') || '<tr><td colspan="5" class="empty">لا توجد طلبات انضمام معلقة</td></tr>'}</tbody></table></div>` : tab === 'all' ? '' : `
     <div class="table-wrap"><table><thead><tr><th>الاسم</th><th>اسم المستخدم</th><th>الهاتف / البريد</th>${tab === 'country' ? '<th>الدولة المسؤول عنها</th>' : tab === 'building' ? '<th>المباني والأدوار</th>' : '<th>الدور</th>'}<th>تاريخ الانضمام</th><th>الحالة</th><th></th></tr></thead><tbody>
     ${list.map(u => `<tr><td><b>${esc(u.name)}</b>${u.notes ? `<div class="muted small">${esc(u.notes)}</div>` : ''}</td><td><span class="ltr">${esc(u.username)}</span></td><td><span class="ltr">${esc(u.phone)}</span><div class="muted small ltr">${esc(u.email)}</div></td>
       <td>${tab === 'country' ? u.countries.map(c => `<span class="badge ${c.is_primary ? 'ok' : 'info'}">${esc(c.name)}${c.is_primary ? '' : ' (تفويض)'}</span>`).join(' ') : tab === 'building' ? floorsText(u.floors) : esc(App.roleLabels[u.role])}</td>
@@ -23,7 +31,7 @@ App.view('people', async (page, ctx) => {
       <td class="actions"><button class="btn sm sec" data-e="${u.id}">تعديل</button> ${u.id !== App.user.id ? `<button class="btn sm sec" data-t="${u.id}">${u.status === 'active' ? 'إيقاف' : 'تنشيط'}</button> <button class="btn sm danger" data-d="${u.id}">حذف</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">لا توجد حسابات</td></tr>'}</tbody></table></div>`}`;
   const form = u => {
     const role0 = u ? u.role : (tab === 'country' ? 'country_supervisor' : tab === 'building' ? 'building_supervisor' : 'event_manager');
-    const roleOpts = tab === 'other' ? Object.entries(App.roleLabels).filter(([k]) => groups.other.includes(k)) : [[role0, App.roleLabels[role0]]];
+    const roleOpts = tab === 'other' || tab === 'all' ? Object.entries(App.roleLabels) : [[role0, App.roleLabels[role0]]];
     const prim = u?.countries.find(c => c.is_primary)?.id, extra = (u?.countries || []).filter(c => !c.is_primary).map(c => c.id), myF = (u?.floors || []).map(f => f.id);
     const body = `<form id="uf" autocomplete="off"><div class="fgrid"><div class="field"><label>الاسم *</label><input name="name" required value="${esc(u?.name)}"></div><div class="field"><label>رقم الهاتف</label><input name="phone" dir="ltr" style="text-align:right" value="${esc(u?.phone)}"></div>
       <div class="field"><label>البريد الإلكتروني</label><input type="email" name="email" dir="ltr" style="text-align:right" value="${esc(u?.email)}"></div><div class="field"><label>الدور</label><select name="role" id="rl">${opts(roleOpts, role0)}</select></div>
