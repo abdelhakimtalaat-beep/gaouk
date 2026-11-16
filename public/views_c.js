@@ -106,11 +106,11 @@ App.view('reports', async (page, ctx) => {
   async function run() {
     R.country_id = $('#rcountry').value; R.date = $('#rdate').value; R.from = $('#rfrom').value; R.to = $('#rto').value; R.building_id = $('#rbld').value; const p = params();
     const d = await api('GET', `/reports/${R.type}?` + qs(p)); if (ctx.stale()) return;
-    $('#out').innerHTML = `<div class="card" id="sheet"><div class="row no-print" style="margin-bottom:10px"><h2 style="margin:0">${esc(d.title)}</h2><span class="badge">${d.rows.length} سطر</span><div class="grow"></div><button class="btn" id="pdf">PDF — فتح ومشاركة</button><button class="btn sec" id="pr">طباعة</button><button class="btn sec" id="xl">تصدير Excel</button><button class="btn sec" id="cv">CSV</button></div>
+    $('#out').innerHTML = `<div class="card" id="sheet"><div class="row no-print" style="margin-bottom:10px"><h2 style="margin:0">${esc(d.title)}</h2><span class="badge">${d.rows.length} سطر</span><div class="grow"></div><button class="btn" id="pdf">PDF — فتح ومشاركة</button><button class="btn sec" id="xl">تصدير Excel</button></div>
       <div class="print-only tc" style="margin-bottom:10px"><h2>جاؤوك — ${esc(d.title)}</h2><div>${esc(d.event)} ${d.subtitle ? '— ' + esc(d.subtitle) : ''}</div><div class="small">أُعدّ بواسطة ${esc(d.generated_by)} — ${new Date(d.generated_at).toLocaleString('ar-EG')}</div></div>
       ${d.subtitle ? `<div class="muted" style="margin-bottom:8px">${esc(d.subtitle)}</div>` : ''}<div class="table-wrap"><table><thead><tr>${d.columns.map(c => `<th>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>
       ${d.rows.map(r => `<tr${r.country === 'الإجمالي' || r.date === 'الإجمالي' ? ' style="font-weight:700;background:#fdf1b8"' : r.flight === 'إجمالي اليوم' ? ' style="font-weight:700;background:#f1f6df"' : ''}>${d.columns.map(c => `<td>${esc(r[c.key] ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${d.columns.length}" class="empty">لا توجد بيانات لهذا التقرير</td></tr>`}</tbody></table></div></div>`;
-    $('#pr').onclick = () => printNow($('#sheet')); $('#pdf').onclick = () => sharePdf(d, `gaouk-${R.type}-${todayStr()}.pdf`); $('#xl').onclick = () => download(`/reports/${R.type}?` + qs({ ...p, format: 'xlsx' }), `gaouk-${R.type}-${todayStr()}.xlsx`); $('#cv').onclick = () => download(`/reports/${R.type}?` + qs({ ...p, format: 'csv' }), `gaouk-${R.type}-${todayStr()}.csv`);
+    $('#pdf').onclick = () => sharePdf(d, `gaouk-${R.type}-${todayStr()}.pdf`); $('#xl').onclick = () => download(`/reports/${R.type}?` + qs({ ...p, format: 'xlsx' }), `gaouk-${R.type}-${todayStr()}.xlsx`);
   }
   $('#rall').onclick = () => { $('#rfrom').value = ''; $('#rto').value = ''; run(); };
   $('#run').onclick = run; await run();
@@ -159,7 +159,7 @@ async function sharePdf(d, name) {
     if (w) { try { w.location.href = url; } catch (_) {} }
     const canShare = !!(navigator.canShare && navigator.canShare({ files: [file] }));
     const buttons = [];
-    if (canShare) buttons.push({ label: 'مشاركة (واتساب وغيره)', onClick: async m => { try { await navigator.share({ files: [file], title: d.title }); m.close(); } catch (e) { if (e.name !== 'AbortError') toast('تعذّرت المشاركة، استخدم «فتح» أو «تنزيل»', 'warn'); } } });
+    if (canShare) buttons.push({ label: 'مشاركة', onClick: async m => { try { await navigator.share({ files: [file], title: d.title }); m.close(); } catch (e) { if (e.name !== 'AbortError') toast('تعذّرت المشاركة، استخدم «فتح» أو «تنزيل»', 'warn'); } } });
     buttons.push({ label: 'فتح PDF', cls: canShare ? 'sec' : '', onClick: () => { window.open(url, '_blank'); } });
     buttons.push({ label: 'تنزيل', cls: 'sec', onClick: () => { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); } });
     buttons.push({ label: 'إغلاق', cls: 'sec', close: true });

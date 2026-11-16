@@ -12,9 +12,9 @@ const Adapter = (() => {
   const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   const norm = s => String(s ?? '').normalize('NFKC').replace(/[ً-ْٰـ]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').toLowerCase().replace(/\s+/g, ' ').trim();
 
-  function tableBlob(name, columns, rows, format) {
+  function tableBlob(name, columns, rows, format, extra) {
     if (format === 'csv') return new Blob([GX.toCsv(columns, rows)], { type: 'text/csv;charset=utf-8' });
-    return new Blob([GX.buildXlsx([{ name, columns, rows }])], { type: XLSX_TYPE });
+    return new Blob([GX.buildXlsx([{ name, columns, rows, ...(extra || {}) }])], { type: XLSX_TYPE });
   }
   function parseDateCell(v) {
     if (v === '' || v == null) return '';
@@ -81,7 +81,9 @@ const Adapter = (() => {
       if (path.startsWith('/reports/')) {
         const r = await Compute.report(rpc, App.user, path.slice(9), q);
         rpc('POST', '/audit-event', {}, { action: 'report', entity: 'report', event_id: r.ev.id, details: { type: path.slice(9), rows: r.rows.length } }).catch(() => {});
-        if (q.format === 'csv' || q.format === 'xlsx') return tableBlob(r.def.title, r.cols.map(c => ({ label: c.label, width: c.width })), r.rows.map(x => r.cols.map(c => x[c.key] ?? '')), q.format);
+        if (q.format === 'csv' || q.format === 'xlsx') return tableBlob(r.def.title, r.cols.map(c => ({ label: c.label, width: Math.max(c.width || 12, 12) })), r.rows.map(x => r.cols.map(c => x[c.key] ?? '')), q.format, {
+          head: ['جاؤوك — ' + r.def.title, [r.ev.name, r.subtitle].filter(Boolean).join(' — '), 'أُعدّ بواسطة ' + App.user.name + ' — ' + new Date().toLocaleString('ar-EG')],
+          rowStyles: r.rows.map(x => x.country === 'الإجمالي' || x.date === 'الإجمالي' ? 'total' : x.flight === 'إجمالي اليوم' ? 'sub' : null) });
         return { title: r.def.title, event: r.ev.name, subtitle: r.subtitle || '', scope_note: App.user.role === 'country_supervisor' ? 'بيانات دولتك فقط' : '', columns: r.cols, rows: r.rows, generated_by: App.user.name, generated_at: new Date().toISOString() };
       }
       if (path === '/visitors-export') {
