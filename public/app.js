@@ -91,7 +91,7 @@ function printNow(target) {
 // ---------- الأيقونات والقائمة ----------
 const ICONS = {
   home: '<path d="M3 11 12 3l9 8M5 10v10h14V10"/>', cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>', users: '<circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.6 3-6 7-6s7 2.4 7 6M16 4.5a3.5 3.5 0 0 1 0 7M22 20c0-2.6-1.6-4.5-4-5.4"/>',
-  bed: '<path d="M3 18V6M3 14h18v4M21 14v-3a3 3 0 0 0-3-3h-7v6"/><circle cx="7" cy="11" r="1.6"/>', car: '<path d="M5 16 6.5 10a2 2 0 0 1 2-1.5h7a2 2 0 0 1 2 1.5L19 16M3 16h18v3H3zM7 19v2M17 19v2"/>',
+  plane: '<path d="M21 3L3 10.5l7 2.5 2.5 7z"/><path d="M10 13l11-10"/>', bed: '<path d="M3 18V6M3 14h18v4M21 14v-3a3 3 0 0 0-3-3h-7v6"/><circle cx="7" cy="11" r="1.6"/>', car: '<path d="M5 16 6.5 10a2 2 0 0 1 2-1.5h7a2 2 0 0 1 2 1.5L19 16M3 16h18v3H3zM7 19v2M17 19v2"/>',
   meal: '<path d="M6 3v8a2 2 0 0 0 2 2v8M10 3v8M8 3v8M18 3c-2 2-3 5-3 8h3v10"/>', shield: '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
   chart: '<path d="M4 20V4M4 20h16M8 16v-5M12 16V8M16 16v-3"/>', globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
   build: '<path d="M4 21V8l8-5 8 5v13M9 21v-6h6v6M9 11h.01M15 11h.01"/>', log: '<path d="M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h7"/>', key: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3"/>', db: '<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
@@ -101,6 +101,7 @@ App.nav = [
   ['dashboard', 'لوحة التحكم', 'home', null],
   ['events', 'المناسبات', 'cal', ['admin', 'event_manager']],
   ['visitors', 'الزائرون', 'users', ['admin', 'event_manager', 'country_supervisor', 'transport', 'catering', 'building_supervisor']],
+  ['flights', 'الرحلات', 'plane', ['admin', 'event_manager', 'country_supervisor']],
   ['persons', 'قاعدة البيانات', 'db', ['admin', 'event_manager', 'country_supervisor']],
   ['housing', 'تسكين الغرف', 'bed', ['admin', 'event_manager', 'building_supervisor']],
   ['drivers', 'السائقون والسيارات', 'car', ['admin', 'event_manager', 'transport']],

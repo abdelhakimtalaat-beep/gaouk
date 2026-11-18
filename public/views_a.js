@@ -77,16 +77,15 @@ App.view('events', async page => {
 const VF = { q: '', country_id: '', category: '', arrival: '', departure: '', building_id: '', room_id: '', group_id: '', unhoused: '' };
 App.view('visitors', async (page, ctx) => {
   const writer = can('admin', 'event_manager', 'country_supervisor');
-  const tab = ctx.sub === 'groups' ? 'groups' : ctx.sub === 'flights' ? 'flights' : 'list';
+  const tab = ctx.sub === 'groups' ? 'groups' : 'list';
   const f = (App._vf ||= { ...VF });
   let structure = null;
   if (can('admin', 'event_manager', 'building_supervisor')) { try { structure = (await api('GET', '/structure')).buildings; } catch (_) {} }
   const groups = (await api('GET', '/groups?event_id=' + App.eventId)).groups;
   const head = `<div class="page-head"><h1>الزائرون</h1>${App.user.role === 'country_supervisor' ? `<span class="badge info">دولتك: ${esc(App.countries.map(c => c.name).join('، '))}</span>` : ''}<div class="grow"></div>
     ${writer ? `<button class="btn" id="addv">+ زائر جديد</button><button class="btn" id="addng">+ فوج جديد</button><button class="btn sec" id="addfromdb">+ من قاعدة البيانات</button><button class="btn sec" id="impv">استيراد Excel</button><button class="btn sec" id="expv">تصدير Excel</button>` : ''}</div>
-    <div class="tabs"><button class="${tab === 'list' ? 'on' : ''}" onclick="location.hash='#/visitors'">قائمة الزائرين</button><button class="${tab === 'groups' ? 'on' : ''}" onclick="location.hash='#/visitors/groups'">العائلات والأفواج</button>${writer ? `<button class="${tab === 'flights' ? 'on' : ''}" onclick="location.hash='#/visitors/flights'">الرحلات</button>` : ''}</div>`;
+    <div class="tabs"><button class="${tab === 'list' ? 'on' : ''}" onclick="location.hash='#/visitors'">قائمة الزائرين</button><button class="${tab === 'groups' ? 'on' : ''}" onclick="location.hash='#/visitors/groups'">العائلات والأفواج</button></div>`;
   if (tab === 'groups') return groupsTab(page, head, groups, writer, ctx);
-  if (tab === 'flights') return flightsTab(page, head, groups);
 
   page.innerHTML = head + `<div class="filters card" style="padding:12px"><div><label>بحث (اسم / هاتف / رحلة)</label><input type="search" id="f_q" value="${esc(f.q)}" placeholder="ابحث…"></div>
     <div><label>الدولة</label><select id="f_country_id">${countryOpts(f.country_id, 'الكل')}</select></div>
@@ -179,18 +178,9 @@ function visitorForm(v, groups, done, pre) {
       <div class="field"><label>صلة القرابة</label><input name="relation" value="${esc(v?.relation)}"></div><div class="field full"><div class="alert info" style="margin:0">الدولة وبيانات الرحلة لهذا التابع تُؤخذ تلقائياً من رب الأسرة.</div></div></div>
     <div id="grpbox" class="fgrid" hidden><div class="field"><label>الفوج *</label><select name="group_id">${opts(groups.map(g => [g.id, `${g.name} (${g.country_name})`]), v?.group_id, 'اختر الفوج…')}</select></div>
       <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" name="is_leader" ${(v?.is_leader ?? pre.is_leader) ? 'checked' : ''}> قائد الفوج</label><button type="button" class="btn ghost sm" id="newg">+ إنشاء فوج جديد</button></div></div>
-    <div id="travbox"><h3>رحلة الوصول</h3><div class="fgrid"><div class="field full"><label>رحلة محفوظة (اختياري)</label><select id="aflight"><option value="">— إدخال يدوي —</option></select></div>
-    <div class="field"><label>تاريخ الوصول</label><input type="date" name="arrival_date" value="${esc(v?.arrival_date)}"></div><div class="field"><label>وقت الوصول</label><input type="time" name="arrival_time" value="${esc(v?.arrival_time)}"></div>
-    <div class="field"><label>رقم رحلة الوصول</label><input name="flight_no" dir="ltr" style="text-align:right" value="${esc(v?.flight_no)}"></div><div class="field"><label>شركة الطيران</label><input name="airline" list="dl_airlines" value="${esc(v?.airline)}"></div>
-    <div class="field"><label>مطار الوصول</label><input name="airport" list="dl_airports" value="${esc(v?.airport)}"></div>
-    <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" id="saveaf" checked> حفظ هذه الرحلة في قائمة الرحلات للاستخدام لاحقاً</label></div></div>
-    <h3>رحلة المغادرة (منفصلة عن رحلة الوصول)</h3><div class="fgrid"><div class="field full"><label>رحلة محفوظة (اختياري)</label><select id="dflight"><option value="">— إدخال يدوي —</option></select></div>
-    <div class="field"><label>تاريخ المغادرة</label><input type="date" name="departure_date" value="${esc(v?.departure_date)}"></div><div class="field"><label>وقت المغادرة</label><input type="time" name="departure_time" value="${esc(v?.departure_time)}"></div>
-    <div class="field"><label>رقم رحلة المغادرة</label><input name="dep_flight_no" dir="ltr" style="text-align:right" value="${esc(v?.dep_flight_no)}"></div><div class="field"><label>شركة الطيران</label><input name="dep_airline" list="dl_airlines" value="${esc(v?.dep_airline)}"></div>
-    <div class="field"><label>مطار المغادرة</label><input name="dep_airport" list="dl_airports" value="${esc(v?.dep_airport)}"></div>
-    <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" id="savedf" checked> حفظ هذه الرحلة في قائمة الرحلات للاستخدام لاحقاً</label></div></div>
-    <div class="fgrid"><div class="field"><label class="check"><input type="checkbox" name="needs_transport" ${v ? (v.needs_transport ? 'checked' : '') : 'checked'}> يحتاج سيارة استقبال/توصيل</label></div></div>
-    <datalist id="dl_airlines"></datalist><datalist id="dl_airports"></datalist></div>`}
+    <div id="travbox"><h3>رحلة الزائر</h3><div class="fgrid"><div class="field"><label>رقم المجموعة</label><select id="fgroup"><option value="">— بدون —</option></select></div>
+    <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" name="needs_transport" ${v ? (v.needs_transport ? 'checked' : '') : 'checked'}> يحتاج سيارة استقبال/توصيل</label></div>
+    <div class="field full"><div id="ftext" class="alert info" style="margin:0">اختر رقم المجموعة لتظهر بيانات رحلتي الوصول والمغادرة. تُعدَّل بيانات الرحلات من تبويب «الرحلات».</div></div></div></div>`}
     <div class="fgrid"><div class="field full"><label>ملاحظات خاصة</label><textarea name="notes" style="min-height:56px">${esc(v?.notes)}</textarea></div></div>
     <div id="fambox" ${cat === 'family_head' ? '' : 'hidden'}><h3>أفراد الأسرة <span class="badge">العدد الكلي: <span id="famcount">${1 + members.length}</span></span></h3><div class="members-edit" id="mrows"></div><button type="button" class="btn sec sm" id="addm">+ إضافة فرد</button></div></form>`;
   const mrow = m => `<div class="mrow" data-id="${m?.id || ''}"><input placeholder="الاسم الكامل" data-k="full_name" value="${esc(m?.full_name)}"><input placeholder="صلة القرابة" data-k="relation" value="${esc(m?.relation)}"><button type="button" class="btn sm danger" data-rm>×</button></div>`;
@@ -215,16 +205,17 @@ function visitorForm(v, groups, done, pre) {
   };
   if ($('#pickhead', m.el)) $('#pickhead', m.el).onclick = chooseHead;
   sync();
-  let flights = []; const FL = { a: { sel: '#aflight', kind: 'arrival', map: { flight_date: 'arrival_date', flight_time: 'arrival_time', flight_no: 'flight_no', airline: 'airline', airport: 'airport' }, save: '#saveaf' },
-    d: { sel: '#dflight', kind: 'departure', map: { flight_date: 'departure_date', flight_time: 'departure_time', flight_no: 'dep_flight_no', airline: 'dep_airline', airport: 'dep_airport' }, save: '#savedf' } };
-  const flightLabel = f => `${f.flight_no}${f.airline ? ' — ' + f.airline : ''}${f.flight_date ? ' — ' + f.flight_date : ''}${f.flight_time ? ' ' + f.flight_time : ''}${f.airport ? ' — ' + f.airport : ''}`;
-  const lockFlight = k => { const c = FL[k]; const sel = $(c.sel, m.el); if (!sel) return; const f = flights.find(x => x.id === +sel.value);
-    for (const [fk, ik] of Object.entries(c.map)) { const el = F[ik]; if (!el) continue; if (f) { el.value = f[fk] || el.value; el.readOnly = true; } else el.readOnly = false; }
-    $(c.save, m.el).closest('.field').hidden = !!f; };
-  if ($('#aflight', m.el)) {
-    api('GET', '/flights?event_id=' + App.eventId).then(r => { flights = r.flights;
-      for (const k of ['a', 'd']) { const c = FL[k]; $(c.sel, m.el).insertAdjacentHTML('beforeend', flights.filter(f => f.kind === c.kind).map(f => `<option value="${f.id}">${esc(flightLabel(f))}</option>`).join('')); const cur = v?.[k === 'a' ? 'arrival_flight_id' : 'departure_flight_id']; if (cur) $(c.sel, m.el).value = cur; $(c.sel, m.el).onchange = () => lockFlight(k); lockFlight(k); }
-      $('#dl_airlines', m.el).innerHTML = [...new Set(flights.map(f => f.airline).filter(Boolean))].map(x => `<option value="${esc(x)}">`).join(''); $('#dl_airports', m.el).innerHTML = [...new Set(flights.map(f => f.airport).filter(Boolean))].map(x => `<option value="${esc(x)}">`).join(''); }).catch(() => {});
+  let flights = [];
+  const fdesc = (f, k) => f ? `<div><b>${k}:</b> ${esc([f.airline, f.flight_no].filter(Boolean).join(' '))}${f.airport ? ' — ' + esc(f.airport) : ''}${f.flight_date ? ' — ' + esc(f.flight_date) : ''}${f.flight_time ? ' ' + esc(f.flight_time) : ''}</div>` : `<div class="muted">لا توجد رحلة ${k}</div>`;
+  const showGroup = () => { if (!$('#fgroup', m.el)) return; const g = $('#fgroup', m.el).value; if (!g) { $('#ftext', m.el).innerHTML = v && (v.arrival_date || v.departure_date) ? `<b>بيانات الرحلة الحالية:</b> وصول ${esc(v.arrival_date || '—')} ${esc(v.arrival_time || '')} ${esc([v.airline, v.flight_no].filter(Boolean).join(' '))} — مغادرة ${esc(v.departure_date || '—')} ${esc(v.departure_time || '')} ${esc([v.dep_airline, v.dep_flight_no].filter(Boolean).join(' '))}` : 'اختر رقم المجموعة لتظهر بيانات رحلتي الوصول والمغادرة. تُعدَّل بيانات الرحلات من تبويب «الرحلات».'; return; }
+    const fa = flights.find(f => f.group_no.toLowerCase() === g.toLowerCase() && f.kind === 'arrival'), fd = flights.find(f => f.group_no.toLowerCase() === g.toLowerCase() && f.kind === 'departure'); $('#ftext', m.el).innerHTML = fdesc(fa, 'رحلة الوصول') + fdesc(fd, 'رحلة المغادرة'); };
+  const fillGroups = () => { const sel = $('#fgroup', m.el); if (!sel) return; const cid = F.country_id && !F.country_id.disabled ? +F.country_id.value : (v?.country_id || 0); const cur = sel.value;
+    const gs = [...new Set(flights.filter(f => f.group_no && (!cid || !f.country_id || f.country_id === cid)).map(f => f.group_no))];
+    const curNo = v ? (flights.find(f => f.id === v.arrival_flight_id) || flights.find(f => f.id === v.departure_flight_id) || {}).group_no : '';
+    sel.innerHTML = '<option value="">— بدون —</option>' + gs.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join(''); sel.value = cur || curNo || ''; showGroup(); };
+  if ($('#fgroup', m.el)) {
+    api('GET', '/flights?event_id=' + App.eventId).then(r => { flights = r.flights; fillGroups(); }).catch(() => {});
+    $('#fgroup', m.el).onchange = showGroup; if (F.country_id) F.country_id.addEventListener('change', fillGroups);
   }
   $('#newg', m.el) && ($('#newg', m.el).onclick = () => groupForm({ country_id: F.country_id.value }, async id => { const gs = (await api('GET', '/groups?event_id=' + App.eventId)).groups; groups.splice(0, groups.length, ...gs); F.group_id.innerHTML = opts(gs.map(g => [g.id, `${g.name} (${g.country_name})`]), id, 'اختر الفوج…'); }));
   const check = debounce(async () => {
@@ -252,19 +243,9 @@ function visitorForm(v, groups, done, pre) {
       }
       throw e;
     }
-    if (savedId && !isMember && b.category !== 'family_member' && $('#aflight', mm.el)) {
-      try {
-        const link = {};
-        for (const k of ['a', 'd']) { const c = FL[k]; const sel = $(c.sel, mm.el).value;
-          if (sel) { link[k === 'a' ? 'arrival_flight_id' : 'departure_flight_id'] = +sel; continue; }
-          const no = b[c.map.flight_no].trim(); const date = b[c.map.flight_date] || '';
-          if (no && $(c.save, mm.el).checked) {
-            const ex = flights.find(f => f.kind === c.kind && f.flight_no.toLowerCase() === no.toLowerCase() && (f.flight_date || '') === date);
-            link[k === 'a' ? 'arrival_flight_id' : 'departure_flight_id'] = ex ? ex.id : (await api('POST', '/flights', { event_id: App.eventId, kind: c.kind, flight_no: no, airline: b[c.map.airline], airport: b[c.map.airport], flight_date: date, flight_time: b[c.map.flight_time] || '' })).id;
-          } else if (v && v[k === 'a' ? 'arrival_flight_id' : 'departure_flight_id']) link[k === 'a' ? 'arrival_flight_id' : 'departure_flight_id'] = null;
-        }
-        if (Object.keys(link).length) await api('PUT', `/visitors/${savedId}/flights`, link);
-      } catch (e) { toast('حُفظ الزائر لكن تعذّر ربط الرحلة: ' + e.message, 'warn'); }
+    if (savedId && !isMember && b.category !== 'family_member' && $('#fgroup', mm.el)) {
+      const g = $('#fgroup', mm.el).value; const curNo = v ? ((flights.find(f => f.id === v.arrival_flight_id) || flights.find(f => f.id === v.departure_flight_id) || {}).group_no || '') : '';
+      if (g || curNo) { try { await api('PUT', `/visitors/${savedId}/flights`, { group_no: g }); } catch (e) { toast('حُفظ الزائر لكن تعذّر ربط رقم المجموعة: ' + e.message, 'warn'); } }
     }
     mm.close(); toast('تم الحفظ'); done();
   }
@@ -343,7 +324,7 @@ async function pickPerson() {
   return new Promise(res => {
     let fin = false; const done = x => { if (!fin) { fin = true; res(x); } };
     const draw = t => { const q = t.trim(); const l = list.filter(p => !q || (p.full_name + ' ' + p.country_name + ' ' + (p.city || '')).includes(q));
-      return l.length ? l.map(p => `<label style="cursor:pointer"><input type="radio" name="pp" value="${p.id}"> <b>${esc(p.full_name)}</b> <span class="muted small">— ${esc(p.country_name)}${p.city ? ' / ' + esc(p.city) : ''} — ${PCAT[p.category]}${p.birth_date ? ' — ' + esc(p.birth_date) : ''}</span>${p.in_event ? ' <span class="badge warn">مسجّل في هذه المناسبة</span>' : ''}</label>`).join('') : '<div class="empty">لا نتائج. أضف المريد من تبويب «قاعدة البيانات».</div>'; };
+      return l.length ? l.map(p => `<label style="cursor:pointer"><input type="radio" name="pp" value="${p.id}"> <b>${esc(p.full_name)}</b> <span class="muted small">— ${esc(p.country_name)}${p.city ? ' / ' + esc(p.city) : ''} — ${PCAT[p.category]}${p.birth_date ? ' — ' + esc(p.birth_date) : ''}</span> ${ageBadge(p.birth_date)}${p.in_event ? ' <span class="badge warn">مسجّل في هذه المناسبة</span>' : ''}</label>`).join('') : '<div class="empty">لا نتائج. أضف المريد من تبويب «قاعدة البيانات».</div>'; };
     const m = modal({ title: 'اختر من قاعدة البيانات', width: 620, onClose: () => done(null),
       body: `<div class="field"><input type="search" id="pq" placeholder="ابحث بالاسم أو الدولة أو البلد…" autofocus></div><div class="sel-list" id="pl" style="max-height:340px">${draw('')}</div>`,
       buttons: [{ label: 'اختيار', onClick: x => { const r = $('input[name=pp]:checked', x.el); if (!r) { toast('اختر مريداً من القائمة', 'warn'); return; } done(list.find(p => p.id === +r.value)); x.close(); } }, { label: 'إلغاء', cls: 'sec', onClick: x => { done(null); x.close(); } }] });
@@ -351,14 +332,19 @@ async function pickPerson() {
     $('#pl', m.el).ondblclick = e => { const r = e.target.closest('label')?.querySelector('input'); if (r) { done(list.find(p => p.id === +r.value)); m.close(); } };
   });
 }
+// العمر بالسنوات من تاريخ الميلاد (YYYY-MM-DD) حتى اليوم؛ بالغ = 15 فأكثر، طفل = أقل من 15
+const ageOf = bd => { if (!bd || !/^\d{4}-\d\d-\d\d$/.test(bd)) return null; const b = new Date(bd + 'T00:00:00'), n = new Date(); let a = n.getFullYear() - b.getFullYear(); if (n.getMonth() < b.getMonth() || (n.getMonth() === b.getMonth() && n.getDate() < b.getDate())) a--; return a < 0 ? null : a; };
+const ageGroup = bd => { const a = ageOf(bd); return a === null ? '' : a >= 15 ? 'adult' : 'child'; };
+const AGEL = { adult: 'بالغ', child: 'طفل' };
+const ageBadge = bd => { const g = ageGroup(bd); return g ? `<span class="badge ${g === 'adult' ? 'ok' : 'warn'}">${AGEL[g]} (${ageOf(bd)})</span>` : '<span class="muted small">—</span>'; };
 const PCAT = { family_head: 'رب أسرة', family_member: 'تابع لأسرة', individual: 'فرد', group_member: 'ضمن فوج', group_leader: 'مسئول فوج' };
 
 /* ============ قاعدة البيانات (المريدون) ============ */
 App.view('persons', async page => {
-  const S = App._pf ||= { q: '', country_id: '', category: '' };
+  const S = App._pf ||= { q: '', country_id: '', category: '', age: '' };
   const personForm = (p, done) => {
     const body = `<form id="pf"><div class="fgrid"><div class="field full"><label>الاسم *</label><input name="full_name" required value="${esc(p?.full_name)}"></div>
-      <div class="field"><label>تاريخ الميلاد</label><input type="date" name="birth_date" value="${esc(p?.birth_date)}"></div>
+      <div class="field"><label>تاريخ الميلاد <span class="muted small">(بالغ: 15 سنة فأكثر، طفل: أقل من 15)</span></label><input type="date" name="birth_date" value="${esc(p?.birth_date)}"></div>
       <div class="field"><label>الدولة *</label><select name="country_id" required>${countryOpts(p?.country_id ?? (App.countries.length === 1 ? App.countries[0].id : ''), 'اختر…')}</select></div>
       <div class="field"><label>البلد</label><input name="city" value="${esc(p?.city)}"></div>
       <div class="field"><label>التصنيف *</label><select name="category" required>${opts(Object.entries(PCAT), p?.category || 'individual')}</select></div></div></form>`;
@@ -369,14 +355,14 @@ App.view('persons', async page => {
   };
   page.innerHTML = `<div class="page-head"><h1>قاعدة البيانات</h1><div class="grow"></div><button class="btn" id="addp">+ إضافة مريد</button></div>
     <div class="filters card" style="padding:12px"><div><label>بحث</label><input type="search" id="p_q" value="${esc(S.q)}" placeholder="الاسم أو البلد…"></div>
-    <div><label>الدولة</label><select id="p_c">${countryOpts(S.country_id, 'الكل')}</select></div><div><label>التصنيف</label><select id="p_k">${opts(Object.entries(PCAT), S.category, 'الكل')}</select></div></div>
+    <div><label>الدولة</label><select id="p_c">${countryOpts(S.country_id, 'الكل')}</select></div><div><label>التصنيف</label><select id="p_k">${opts(Object.entries(PCAT), S.category, 'الكل')}</select></div><div><label>الفئة العمرية</label><select id="p_a">${opts([['adult', 'بالغ (15 سنة فأكثر)'], ['child', 'طفل (أقل من 15)'], ['none', 'بلا تاريخ ميلاد']], S.age, 'الكل')}</select></div></div>
     <div id="plist"></div><p class="muted small">المريدون المسجلون هنا متاحون للاختيار في أي مناسبة من تبويب «الزائرون» ← «من قاعدة البيانات».</p>`;
   let list = [];
-  const draw = () => { $('#plist').innerHTML = `<div class="table-wrap"><table><thead><tr><th>الاسم</th><th>تاريخ الميلاد</th><th>الدولة</th><th>البلد</th><th>التصنيف</th><th></th></tr></thead><tbody>${list.map(p => `<tr><td><b>${esc(p.full_name)}</b></td><td>${p.birth_date ? fmtDate(p.birth_date) : '—'}</td><td>${esc(p.country_name)}</td><td>${esc(p.city) || '—'}</td><td>${PCAT[p.category]}</td>
-    <td class="actions"><button class="btn sm sec" data-pe="${p.id}">تعديل</button> <button class="btn sm danger" data-pd="${p.id}">حذف</button></td></tr>`).join('') || '<tr><td colspan="6" class="empty">لا يوجد مريدون</td></tr>'}</tbody></table></div>`; };
-  const load = async () => { list = (await api('GET', '/persons?' + qs(S))).persons; draw(); };
-  const rd = debounce(() => { S.q = $('#p_q').value; S.country_id = $('#p_c').value; S.category = $('#p_k').value; load(); }, 250);
-  ['p_q', 'p_c', 'p_k'].forEach(i => { $('#' + i).addEventListener('input', rd); $('#' + i).addEventListener('change', rd); });
+  const draw = () => { $('#plist').innerHTML = `<div class="table-wrap"><table><thead><tr><th>الاسم</th><th>تاريخ الميلاد</th><th>الفئة العمرية</th><th>الدولة</th><th>البلد</th><th>التصنيف</th><th></th></tr></thead><tbody>${list.map(p => `<tr><td><b>${esc(p.full_name)}</b></td><td>${p.birth_date ? fmtDate(p.birth_date) : '—'}</td><td>${ageBadge(p.birth_date)}</td><td>${esc(p.country_name)}</td><td>${esc(p.city) || '—'}</td><td>${PCAT[p.category]}</td>
+    <td class="actions"><button class="btn sm sec" data-pe="${p.id}">تعديل</button> <button class="btn sm danger" data-pd="${p.id}">حذف</button></td></tr>`).join('') || '<tr><td colspan="7" class="empty">لا يوجد مريدون</td></tr>'}</tbody></table></div>`; };
+  const load = async () => { list = (await api('GET', '/persons?' + qs({ q: S.q, country_id: S.country_id, category: S.category }))).persons.filter(p => !S.age || (S.age === 'none' ? !ageGroup(p.birth_date) : ageGroup(p.birth_date) === S.age)); draw(); };
+  const rd = debounce(() => { if (!$('#p_q')) return; S.q = $('#p_q').value; S.country_id = $('#p_c').value; S.category = $('#p_k').value; S.age = $('#p_a').value; load(); }, 250);
+  ['p_q', 'p_c', 'p_k', 'p_a'].forEach(i => { $('#' + i).addEventListener('input', rd); $('#' + i).addEventListener('change', rd); });
   $('#addp').onclick = () => personForm(null, load);
   page.onclick = async e => { const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.pe) personForm(list.find(p => p.id === +b.dataset.pe), load);
@@ -384,41 +370,51 @@ App.view('persons', async page => {
   await load();
 });
 
-/* ============ الرحلات ============ */
-async function flightsTab(page, head, groups) {
-  const canEdit = can('admin', 'event_manager');
-  const { flights } = await api('GET', '/flights?event_id=' + App.eventId);
+/* ============ الرحلات (تبويب مستقل: مجموعات رحلات كل مناسبة) ============ */
+App.view('flights', async (page, ctx) => {
+  const canEdit = can('admin', 'event_manager', 'country_supervisor');
+  const { flights } = await api('GET', '/flights?event_id=' + App.eventId); if (ctx.stale()) return;
   const KIND = { arrival: 'وصول', departure: 'مغادرة' };
-  const form = (f, done, kind) => {
-    const k = f?.kind || kind || 'arrival';
-    const body = `<form id="ff"><div class="fgrid"><div class="field"><label>النوع *</label><select name="kind" ${f ? 'disabled' : ''}>${opts(Object.entries(KIND), k)}</select></div>
+  const S = App._ff ||= { q: '', country_id: '', kind: '' };
+  const form = (f, done) => {
+    const k = f?.kind || 'arrival';
+    const body = `<form id="ff"><div class="fgrid"><div class="field"><label>رقم المجموعة *</label><input name="group_no" required value="${esc(f?.group_no)}" placeholder="مثال: 12"></div>
+      <div class="field"><label>الدولة *</label><select name="country_id" required>${countryOpts(f?.country_id ?? (App.countries.length === 1 ? App.countries[0].id : ''), 'اختر…')}</select></div>
+      <div class="field"><label>وصول أم مغادرة *</label><select name="kind" id="fk" ${f ? 'disabled' : ''}>${opts(Object.entries(KIND), k)}</select></div>
+      <div class="field"><label>شركة الطيران</label><input name="airline" value="${esc(f?.airline)}"></div>
       <div class="field"><label>رقم الرحلة *</label><input name="flight_no" required dir="ltr" style="text-align:right" value="${esc(f?.flight_no)}"></div>
-      <div class="field"><label>شركة الطيران</label><input name="airline" value="${esc(f?.airline)}"></div><div class="field"><label>المطار (وصول أو مغادرة)</label><input name="airport" value="${esc(f?.airport)}"></div>
-      <div class="field"><label>التاريخ</label><input type="date" name="flight_date" value="${esc(f?.flight_date)}"></div><div class="field"><label>الوقت</label><input type="time" name="flight_time" value="${esc(f?.flight_time)}"></div>
-      <div class="field full"><label>ملاحظات</label><input name="notes" value="${esc(f?.notes)}"></div></div>
-      ${f ? '<div class="alert info">أي تعديل في التاريخ أو الوقت أو المطار أو الرقم ينعكس تلقائياً على جميع ركاب هذه الرحلة.</div>' : ''}</form>`;
-    modal({ title: f ? 'تعديل رحلة' : 'رحلة جديدة', width: 600, body, buttons: [{ label: 'حفظ', onClick: async m => {
-      const F = $('#ff', m.el); if (!F.reportValidity()) return; const b = formData(F); if (f) delete b.kind; else b.event_id = App.eventId;
-      const r = f ? await api('PUT', '/flights/' + f.id, b) : await api('POST', '/flights', b); m.close(); toast('تم الحفظ'); done(f ? f.id : r.id, !f);
+      <div class="field"><label>المطار</label><input name="airport" value="${esc(f?.airport)}"></div>
+      <div class="field"><label>التاريخ</label><input type="date" name="flight_date" value="${esc(f?.flight_date)}"></div>
+      <div class="field"><label id="ftl">${k === 'arrival' ? 'وقت الوصول' : 'وقت المغادرة'}</label><input type="time" name="flight_time" value="${esc(f?.flight_time)}"></div></div>
+      <div class="alert info">رقم المجموعة يربط رحلة الوصول برحلة المغادرة لنفس المجموعة. عند تسجيل أي زائر تختار له رقم المجموعة فقط فتُطبَّق عليه بيانات الرحلتين، وأي تعديل هنا ينعكس على كل ركاب المجموعة.</div></form>`;
+    const m = modal({ title: f ? 'تعديل رحلة' : 'رحلة جديدة', width: 640, body, buttons: [{ label: 'حفظ', onClick: async mm => {
+      const F = $('#ff', mm.el); if (!F.reportValidity()) return; const b = formData(F); if (f) delete b.kind; else b.event_id = App.eventId;
+      const r = f ? await api('PUT', '/flights/' + f.id, b) : await api('POST', '/flights', b); mm.close(); toast('تم الحفظ'); done(f ? f.id : r.id, !f);
     } }, { label: 'إلغاء', cls: 'sec', close: true }] });
+    $('#fk', m.el).onchange = e => { $('#ftl', m.el).textContent = e.target.value === 'arrival' ? 'وقت الوصول' : 'وقت المغادرة'; };
   };
-  const rows = list => list.map(f => `<tr><td><b class="ltr">${esc(f.flight_no)}</b></td><td>${KIND[f.kind]}</td><td>${esc(f.airline)}</td><td>${esc(f.airport)}</td><td>${f.flight_date ? fmtDate(f.flight_date, f.flight_time) : '—'}</td><td>${f.passengers}</td>
-    <td class="actions"><button class="btn sm" data-fp="${f.id}">+ ركاب من قاعدة البيانات</button> ${canEdit ? `<button class="btn sm sec" data-fe="${f.id}">تعديل</button> <button class="btn sm danger" data-fd="${f.id}">حذف</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">لا توجد رحلات. أضف رحلة ثم اختر لها الركاب من قاعدة البيانات.</td></tr>';
-  page.innerHTML = head + `<div class="row" style="margin-bottom:10px"><button class="btn" id="addf">+ رحلة جديدة</button></div>
-    <div class="table-wrap"><table><thead><tr><th>رقم الرحلة</th><th>النوع</th><th>الشركة</th><th>المطار</th><th>الموعد</th><th>عدد الركاب</th><th></th></tr></thead><tbody>${rows(flights)}</tbody></table></div>
-    <p class="muted small">الرحلة تُحفظ مرة واحدة ثم تُختار عند تسجيل أي زائر. تغيير موعد الرحلة يغيّر موعد كل ركابها دفعة واحدة. رحلة الوصول ورحلة المغادرة منفصلتان وقد تكونان من مطارين مختلفين.</p>`;
-  const after = async (id, isNew) => { App.refresh(); if (isNew) { const f = (await api('GET', '/flights?event_id=' + App.eventId)).flights.find(x => x.id === id); if (f && await confirmBox(`تمت إضافة الرحلة ${f.flight_no}. هل تريد إضافة ركابها الآن من قاعدة البيانات؟`, { okText: 'إضافة ركاب' })) addPassengers(f); } };
-  $('#addf').onclick = () => form(null, after);
+  const shown = () => flights.filter(f => (!S.q || (f.group_no + ' ' + f.flight_no + ' ' + f.airline + ' ' + f.airport).toLowerCase().includes(S.q.toLowerCase())) && (!S.country_id || String(f.country_id) === S.country_id) && (!S.kind || f.kind === S.kind));
+  const rows = () => shown().map(f => `<tr><td><b>${esc(f.group_no) || '—'}</b></td><td>${esc(f.country_name) || '—'}</td><td><span class="badge ${f.kind === 'arrival' ? 'ok' : 'info'}">${KIND[f.kind]}</span></td><td>${esc(f.airline)}</td><td><b class="ltr">${esc(f.flight_no)}</b></td><td>${esc(f.airport)}</td>
+    <td>${f.flight_date ? fmtDate(f.flight_date) : '—'}</td><td>${esc(f.flight_time) || '—'}</td><td>${f.passengers}</td>
+    <td class="actions"><button class="btn sm" data-fp="${f.id}">+ ركاب</button> <button class="btn sm sec" data-fe="${f.id}">تعديل</button> <button class="btn sm danger" data-fd="${f.id}">حذف</button></td></tr>`).join('') || '<tr><td colspan="10" class="empty">لا توجد رحلات في هذه المناسبة. اضغط «رحلة جديدة».</td></tr>';
+  page.innerHTML = `<div class="page-head"><h1>الرحلات</h1><div class="grow"></div>${canEdit ? '<button class="btn" id="addf">+ رحلة جديدة</button>' : ''}</div>
+    <div class="filters card" style="padding:12px"><div><label>بحث (رقم المجموعة / الرحلة / الشركة / المطار)</label><input type="search" id="fq" value="${esc(S.q)}"></div><div><label>الدولة</label><select id="fc">${countryOpts(S.country_id, 'الكل')}</select></div><div><label>النوع</label><select id="fkk">${opts(Object.entries(KIND), S.kind, 'الكل')}</select></div></div>
+    <div class="table-wrap"><table><thead><tr><th>رقم المجموعة</th><th>الدولة</th><th>النوع</th><th>شركة الطيران</th><th>رقم الرحلة</th><th>المطار</th><th>التاريخ</th><th>الوقت</th><th>الركاب</th><th></th></tr></thead><tbody id="frows">${rows()}</tbody></table></div>
+    <p class="muted small">لكل مناسبة مجموعة رحلاتها الخاصة. أضف لكل مجموعة رحلة وصول ورحلة مغادرة بنفس رقم المجموعة، ثم اختر رقم المجموعة في بيانات الزائر.</p>`;
+  const redraw = () => { S.q = $('#fq').value; S.country_id = $('#fc').value; S.kind = $('#fkk').value; $('#frows').innerHTML = rows(); };
+  ['fq', 'fc', 'fkk'].forEach(i => { $('#' + i).addEventListener('input', redraw); $('#' + i).addEventListener('change', redraw); });
+  const after = async (id, isNew) => { await App.refresh(); if (isNew) { const f = (await api('GET', '/flights?event_id=' + App.eventId)).flights.find(x => x.id === id); if (f && await confirmBox(`تمت إضافة الرحلة ${f.flight_no} للمجموعة ${f.group_no}. هل تريد إضافة ركابها الآن من قاعدة البيانات؟`, { okText: 'إضافة ركاب' })) addPassengers(f); } };
+  if ($('#addf')) $('#addf').onclick = () => form(null, after);
   page.onclick = async e => { const b = e.target.closest('button'); if (!b) return; const id = +(b.dataset.fp || b.dataset.fe || b.dataset.fd); const f = flights.find(x => x.id === id); if (!f) return;
     if (b.dataset.fp) addPassengers(f); if (b.dataset.fe) form(f, () => App.refresh());
-    if (b.dataset.fd && await confirmBox(`حذف الرحلة ${f.flight_no}؟ تبقى بيانات موعد الركاب كما هي ويُفك ارتباطهم بها.`, { danger: true, okText: 'حذف' })) { await api('DELETE', '/flights/' + f.id); toast('تم الحذف'); App.refresh(); } };
-}
+    if (b.dataset.fd && await confirmBox(`حذف رحلة ${KIND[f.kind]} المجموعة ${f.group_no} (${f.flight_no})؟ تبقى بيانات موعد الركاب كما هي ويُفك ارتباطهم بها.`, { danger: true, okText: 'حذف' })) { await api('DELETE', '/flights/' + f.id); toast('تم الحذف'); App.refresh(); } };
+});
 // اختيار ركاب الرحلة من قاعدة البيانات بعلامة صح
 async function addPassengers(f) {
-  let list; try { list = (await api('GET', '/persons?event_id=' + App.eventId)).persons; } catch (e) { toast(e.message, 'err'); return; }
+  let list; try { list = (await api('GET', '/persons?event_id=' + App.eventId)).persons.filter(p => !f.country_id || p.country_id === f.country_id); } catch (e) { toast(e.message, 'err'); return; }
   const sel = new Set(); const draw = (t, c) => { const q = t.trim(); const l = list.filter(p => (!q || (p.full_name + ' ' + (p.city || '')).includes(q)) && (!c || String(p.country_id) === c));
-    return l.length ? l.map(p => `<label style="cursor:pointer;display:block"><input type="checkbox" data-p="${p.id}" ${sel.has(p.id) ? 'checked' : ''}> <b>${esc(p.full_name)}</b> <span class="muted small">— ${esc(p.country_name)}${p.city ? ' / ' + esc(p.city) : ''} — ${PCAT[p.category]}</span>${p.in_event ? ' <span class="badge info">مسجّل في المناسبة</span>' : ''}</label>`).join('') : '<div class="empty">لا نتائج. أضف الأسماء أولاً من تبويب «قاعدة البيانات».</div>'; };
-  const m = modal({ title: `ركاب الرحلة ${f.flight_no}`, width: 640, body: `<div class="fgrid"><div class="field"><input type="search" id="xq" placeholder="ابحث بالاسم أو البلد…"></div><div class="field"><select id="xc">${countryOpts('', 'كل الدول')}</select></div></div>
+    return l.length ? l.map(p => `<label style="cursor:pointer;display:block"><input type="checkbox" data-p="${p.id}" ${sel.has(p.id) ? 'checked' : ''}> <b>${esc(p.full_name)}</b> <span class="muted small">— ${esc(p.country_name)}${p.city ? ' / ' + esc(p.city) : ''} — ${PCAT[p.category]}</span> ${ageBadge(p.birth_date)}${p.in_event ? ' <span class="badge info">مسجّل في المناسبة</span>' : ''}</label>`).join('') : '<div class="empty">لا نتائج. أضف الأسماء أولاً من تبويب «قاعدة البيانات».</div>'; };
+  const m = modal({ title: `ركاب المجموعة ${f.group_no} — ${f.flight_no}`, width: 640, body: `<div class="fgrid"><div class="field"><input type="search" id="xq" placeholder="ابحث بالاسم أو البلد…"></div><div class="field"><select id="xc">${countryOpts('', 'كل الدول')}</select></div></div>
     <div class="row" style="margin:6px 0"><button class="btn ghost sm" id="xall">تحديد كل الظاهر</button><button class="btn ghost sm" id="xnone">إلغاء التحديد</button><b class="badge ok" id="xn">0 محدد</b></div>
     <div class="sel-list" id="xl" style="max-height:360px">${draw('', '')}</div>`,
     buttons: [{ label: 'إضافة المحددين إلى الرحلة', onClick: async x => { if (!sel.size) { toast('حدد اسماً واحداً على الأقل', 'warn'); return; } const r = await api('POST', `/flights/${f.id}/passengers`, { person_ids: [...sel] }); x.close();
