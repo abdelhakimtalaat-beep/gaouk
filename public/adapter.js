@@ -83,8 +83,8 @@ const Adapter = (() => {
         rpc('POST', '/audit-event', {}, { action: 'report', entity: 'report', event_id: r.ev.id, details: { type: path.slice(9), rows: r.rows.length } }).catch(() => {});
         if (q.format === 'csv' || q.format === 'xlsx') return tableBlob(r.def.title, r.cols.map(c => ({ label: c.label, width: Math.max(c.width || 12, 12) })), r.rows.map(x => r.cols.map(c => x[c.key] ?? '')), q.format, {
           head: ['جاؤوك — ' + r.def.title, [r.ev.name, r.subtitle].filter(Boolean).join(' — '), 'أُعدّ بواسطة ' + App.user.name + ' — ' + new Date().toLocaleString('ar-EG')],
-          rowStyles: r.rows.map(x => x.country === 'الإجمالي' || x.date === 'الإجمالي' ? 'total' : x.flight === 'إجمالي اليوم' ? 'sub' : null) });
-        return { title: r.def.title, event: r.ev.name, subtitle: r.subtitle || '', scope_note: App.user.role === 'country_supervisor' ? 'بيانات دولتك فقط' : '', columns: r.cols, rows: r.rows, generated_by: App.user.name, generated_at: new Date().toISOString() };
+          rowMerge: r.rows.map(x => !!x._style), rowStyles: r.rows.map(x => x._style || (x.country === 'الإجمالي' || x.date === 'الإجمالي' ? 'total' : x.flight === 'إجمالي اليوم' ? 'sub' : null)) });
+        return { title: r.def.title, event: r.ev.name, subtitle: r.subtitle || '', scope_note: App.user.role === 'country_supervisor' ? 'بيانات دولتك فقط' : '', columns: r.cols, rows: r.rows, groups: r.groups, generated_by: App.user.name, generated_at: new Date().toISOString() };
       }
       if (path === '/visitors-export') {
         const { visitors } = await rpc('GET', '/visitors', q);

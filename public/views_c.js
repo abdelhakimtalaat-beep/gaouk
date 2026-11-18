@@ -99,7 +99,7 @@ App.view('countries', async (page, ctx) => {
 App.view('reports', async (page, ctx) => {
   const { reports } = await api('GET', '/report-list'); if (ctx.stale()) return;
   const R = (App._rp ||= { type: null, country_id: '', date: '', from: '', to: '', building_id: '' }); if (!reports.find(r => r.key === R.type)) R.type = reports[0]?.key;
-  const needDate = ['rooms_status'], needRange = ['arrivals_departures', 'arrivals_counts', 'drivers_tasks'], needBld = ['housing'], needCountry = ['visitors_all', 'families_groups', 'arrivals_departures', 'arrivals_counts', 'passenger_list'], needPax = ['passenger_list'];
+  const needDate = ['rooms_status'], needRange = ['arrivals_departures', 'arrivals_counts', 'drivers_tasks'], needBld = ['housing'], needCountry = ['visitors_all', 'families_groups', 'arrivals_departures', 'arrivals_counts', 'passenger_list', 'group_visit'], needPax = ['passenger_list'];
   const structure = can('admin', 'event_manager', 'building_supervisor') ? (await api('GET', '/structure')).buildings : [];
   const cs = App.user.role === 'country_supervisor';
   page.innerHTML = `<div class="page-head"><h1>مركز التقارير</h1></div>${cs ? '<div class="alert info">التقارير تعرض بيانات دولتك فقط.</div>' : ''}
@@ -119,10 +119,10 @@ App.view('reports', async (page, ctx) => {
   async function run() {
     R.country_id = $('#rcountry').value; R.date = $('#rdate').value; R.from = $('#rfrom').value; R.to = $('#rto').value; R.building_id = $('#rbld').value; R.kind = $('#rkind').value; R.flight = $('#rflight').value; R.day = $('#rday').value; R.airport = $('#rairport').value; const p = params();
     const d = await api('GET', `/reports/${R.type}?` + qs(p)); if (ctx.stale()) return;
-    $('#out').innerHTML = `<div class="card" id="sheet"><div class="row no-print" style="margin-bottom:10px"><h2 style="margin:0">${esc(d.title)}</h2><span class="badge">${d.rows.length} سطر</span><div class="grow"></div><button class="btn" id="pdf">PDF — فتح ومشاركة</button><button class="btn sec" id="xl">تصدير Excel</button></div>
+    $('#out').innerHTML = `<div class="card" id="sheet"><div class="row no-print" style="margin-bottom:10px"><h2 style="margin:0">${esc(d.title)}</h2><span class="badge">${d.groups ? d.groups.length + ' مجموعة' : d.rows.length + ' سطر'}</span><div class="grow"></div><button class="btn" id="pdf">PDF — فتح ومشاركة</button><button class="btn sec" id="xl">تصدير Excel</button></div>
       <div class="print-only tc" style="margin-bottom:10px"><h2>جاؤوك — ${esc(d.title)}</h2><div>${esc(d.event)} ${d.subtitle ? '— ' + esc(d.subtitle) : ''}</div><div class="small">أُعدّ بواسطة ${esc(d.generated_by)} — ${new Date(d.generated_at).toLocaleString('ar-EG')}</div></div>
-      ${d.subtitle ? `<div class="muted" style="margin-bottom:8px">${esc(d.subtitle)}</div>` : ''}<div class="table-wrap"><table><thead><tr>${d.columns.map(c => `<th>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>
-      ${d.rows.map(r => `<tr${r.country === 'الإجمالي' || r.date === 'الإجمالي' ? ' style="font-weight:700;background:#fdf1b8"' : r.flight === 'إجمالي اليوم' ? ' style="font-weight:700;background:#f1f6df"' : ''}>${d.columns.map(c => `<td>${esc(r[c.key] ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${d.columns.length}" class="empty">لا توجد بيانات لهذا التقرير</td></tr>`}</tbody></table></div></div>`;
+      ${d.subtitle ? `<div class="muted" style="margin-bottom:8px">${esc(d.subtitle)}</div>` : ''}${d.groups ? `<div id="gv">${d.groups.length ? Pdf.groupUnits(d).map(x => x.html).join('') : '<div class="empty">لا توجد مجموعات رحلات لهذا التقرير</div>'}</div>` : `<div class="table-wrap"><table><thead><tr>${d.columns.map(c => `<th>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>
+      ${d.rows.map(r => `<tr${r.country === 'الإجمالي' || r.date === 'الإجمالي' ? ' style="font-weight:700;background:#fdf1b8"' : r.flight === 'إجمالي اليوم' ? ' style="font-weight:700;background:#f1f6df"' : ''}>${d.columns.map(c => `<td>${esc(r[c.key] ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${d.columns.length}" class="empty">لا توجد بيانات لهذا التقرير</td></tr>`}</tbody></table></div>`}</div>`;
     $('#pdf').onclick = () => sharePdf(d, `gaouk-${R.type}-${todayStr()}.pdf`); $('#xl').onclick = () => download(`/reports/${R.type}?` + qs({ ...p, format: 'xlsx' }), `gaouk-${R.type}-${todayStr()}.xlsx`);
   }
   $('#rall').onclick = () => { $('#rfrom').value = ''; $('#rto').value = ''; run(); };
@@ -176,7 +176,7 @@ async function sharePdf(d, name) {
     buttons.push({ label: 'فتح PDF', cls: canShare ? 'sec' : '', onClick: () => { window.open(url, '_blank'); } });
     buttons.push({ label: 'تنزيل', cls: 'sec', onClick: () => { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); } });
     buttons.push({ label: 'إغلاق', cls: 'sec', close: true });
-    modal({ title: 'ملف PDF جاهز', width: 460, body: `<div class="alert ok">تم تجهيز «${esc(d.title)}» (${d.rows.length} سطر).${w ? ' فُتح في تبويب جديد.' : ''}</div><p class="muted small">${canShare ? 'اضغط «مشاركة» لاختيار واتساب أو أي تطبيق آخر.' : 'من المتصفح المفتوح يمكنك مشاركة الملف أو حفظه. «تنزيل» يحفظه على جهازك لترسله لمن تشاء.'}</p>`, buttons });
+    modal({ title: 'ملف PDF جاهز', width: 460, body: `<div class="alert ok">تم تجهيز «${esc(d.title)}» (${d.groups ? d.groups.length + ' مجموعة' : d.rows.length + ' سطر'}).${w ? ' فُتح في تبويب جديد.' : ''}</div><p class="muted small">${canShare ? 'اضغط «مشاركة» لاختيار واتساب أو أي تطبيق آخر.' : 'من المتصفح المفتوح يمكنك مشاركة الملف أو حفظه. «تنزيل» يحفظه على جهازك لترسله لمن تشاء.'}</p>`, buttons });
   } catch (e) { if (w) w.close(); toast(e.message || 'تعذّر إنشاء PDF', 'err'); }
   finally { btn.disabled = false; btn.textContent = old; }
 }

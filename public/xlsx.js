@@ -78,7 +78,7 @@
       const hdr = r + 1; r++; rowsXml += `<row r="${r}" ht="22" customHeight="1">${cols.map((c, k) => cell(colName(k) + r, c.label, 1)).join('')}</row>`;
       const styled = head.length > 0 || !!s.rowStyles;
       s.rows.forEach((row, ri) => { r++; const rs = s.rowStyles && s.rowStyles[ri]; const bs = rs === 'total' ? 5 : rs === 'sub' ? 6 : styled ? 4 : 0;
-        rowsXml += `<row r="${r}">${row.map((v, k) => cell(colName(k) + r, v, bs)).join('')}</row>`; });
+        rowsXml += `<row r="${r}">${row.map((v, k) => cell(colName(k) + r, v, bs)).join('')}</row>`; if (s.rowMerge && s.rowMerge[ri] && nc > 1) merges.push(`A${r}:${colName(nc - 1)}${r}`); });
       const last = r; const widths = cols.map(c => c.width || 18);
       const xml = `${X}<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:${colName(nc - 1)}${Math.max(last, 1)}"/><sheetViews><sheetView rightToLeft="1" workbookViewId="0"><pane ySplit="${hdr}" topLeftCell="A${hdr + 1}" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A${hdr + 1}" sqref="A${hdr + 1}"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/>`
         + (cols.length ? '<cols>' + widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('') + '</cols>' : '')

@@ -15,7 +15,7 @@ const Pdf = (() => {
 
   function titleHtml(d, first) {
     return first
-      ? `<div style="text-align:center;margin-bottom:10px"><div style="font-size:22px;font-weight:800;color:#14502a">جاؤوك — ${esc(d.title)}</div><div style="font-size:14px;margin-top:3px">${esc(d.event)}${d.subtitle ? ' — ' + esc(d.subtitle) : ''}</div><div style="font-size:11px;color:#666;margin-top:2px">أُعدّ بواسطة ${esc(d.generated_by)} — ${esc(new Date(d.generated_at || Date.now()).toLocaleString('ar-EG'))} — ${d.rows.length} سطر</div></div>`
+      ? `<div style="text-align:center;margin-bottom:10px"><div style="font-size:22px;font-weight:800;color:#14502a">جاؤوك — ${esc(d.title)}</div><div style="font-size:14px;margin-top:3px">${esc(d.event)}${d.subtitle ? ' — ' + esc(d.subtitle) : ''}</div><div style="font-size:11px;color:#666;margin-top:2px">أُعدّ بواسطة ${esc(d.generated_by)} — ${esc(new Date(d.generated_at || Date.now()).toLocaleString('ar-EG'))} — ${d.groups ? d.groups.length + ' مجموعة' : d.rows.length + ' سطر'}</div></div>`
       : `<div style="font-size:12px;color:#14502a;font-weight:700;margin-bottom:6px">جاؤوك — ${esc(d.title)} (تابع)</div>`;
   }
   const tableHtml = (d, rows, widths) => `<table style="border-collapse:collapse;table-layout:fixed;width:${widths.reduce((a, b) => a + b, 0)}px;font-size:12.5px"><colgroup>${widths.map(w => `<col style="width:${w}px"/>`).join('')}</colgroup>
@@ -51,8 +51,35 @@ const Pdf = (() => {
     return new Blob(chunks, { type: 'application/pdf' });
   }
 
+
+  /* تقرير المجموعات: وحدات HTML (رأس المجموعة ثم أزواج الأسماء بعمودين) تُستعمل في الشاشة وفي PDF */
+  const gHead = g => {
+    const info = (t, f) => f ? `<div style="margin-top:3px"><b>${t}:</b> ${esc([f.flight_date, f.airport && 'المطار: ' + f.airport, f.airline && 'شركة الطيران: ' + f.airline, f.flight_no && 'رقم الرحلة: ' + f.flight_no, f.flight_time && (t === 'رحلة الوصول' ? 'وقت الوصول: ' : 'وقت المغادرة: ') + f.flight_time].filter(Boolean).join('  |  '))}</div>` : '';
+    return `<div style="margin-top:14px;padding:8px 10px;border:1px solid #1d5a34;border-radius:6px;background:#eef5ea;font-size:13px"><div style="font-size:16px;font-weight:800;color:#14502a">${g.unlinked ? 'زوار غير مرتبطين برقم مجموعة' : `المجموعة رقم (${esc(g.group_no)})${g.country ? ' - ' + esc(g.country) : ''}`}</div>${info('رحلة الوصول', g.arrival)}${info('رحلة المغادرة', g.departure)}<div style="margin-top:4px;font-weight:700">المجموع: ${g.total} (${g.adults} بالغين - ${g.children} أطفال)</div></div>`;
+  };
+  const gCell = (n, p) => p ? `<td style="width:50%;padding:3px 6px;border-bottom:1px solid #e3e8df;vertical-align:top;font-size:13px"><span style="color:#777">${n}.</span> ${esc(p.name)}${p.child ? ' <span style="color:#a65b00;font-size:11px">(طفل)</span>' : ''}${p.rel ? ` <span style="color:#555;font-size:11.5px">(${esc(p.rel)})</span>` : ''}</td>` : '<td style="width:50%"></td>';
+  const gRow = (g, i) => `<table style="border-collapse:collapse;width:100%;table-layout:fixed"><tr>${gCell(2 * i + 1, g.people[2 * i])}${gCell(2 * i + 2, g.people[2 * i + 1])}</tr></table>`;
+  function groupUnits(d) {
+    const u = []; for (const g of d.groups) { u.push({ html: gHead(g), keep: 2 }); for (let i = 0; i < Math.ceil(g.people.length / 2); i++) u.push({ html: gRow(g, i) }); } return u;
+  }
+  async function groupsReport(d, onProgress) {
+    const W = 794, H = 1123, S = 1.6; const units = groupUnits(d);
+    const stage = document.createElement('div'); stage.style.cssText = `position:fixed;left:-30000px;top:0;width:${W - 2 * PAD}px;${FONT}`; stage.setAttribute('dir', 'rtl');
+    stage.innerHTML = `<div>${titleHtml(d, true)}</div>` + units.map(x => `<div>${x.html}</div>`).join(''); document.body.appendChild(stage);
+    let titleH, hs; try { const k = [...stage.children]; titleH = k[0].offsetHeight + 10; hs = k.slice(1).map(x => x.getBoundingClientRect().height); } finally { stage.remove(); }
+    const avail = H - 2 * PAD - FOOT; const pages = []; let cur = [], used = titleH;
+    units.forEach((x, k) => { const need = hs[k] + (x.keep ? (hs[k + 1] || 0) + (hs[k + 2] || 0) : 0); if (cur.length && used + need > avail) { pages.push(cur); cur = []; used = 26; } cur.push(x); used += hs[k]; });
+    pages.push(cur); const out = [];
+    for (let p = 0; p < pages.length; p++) {
+      const body = titleHtml(d, p === 0) + pages[p].map(x => x.html).join('') + `<div style="position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:11px;color:#777">صفحة ${p + 1} من ${pages.length}</div>`;
+      out.push(await toJpeg(wrap(W, H, body), W, H, S)); if (onProgress) onProgress(p + 1, pages.length);
+    }
+    return buildPdf(out, 595.28, 841.89);
+  }
+
   /** d: بيانات التقرير {title,event,subtitle,generated_by,generated_at,columns:[{key,label}],rows:[{}]} */
   async function report(d, onProgress) {
+    if (d.groups) return groupsReport(d, onProgress);
     const landscape = d.columns.length > 6;
     const W = landscape ? 1123 : 794, H = landscape ? 794 : 1123, S = 1.6;
     const items = d.rows.map((r, i) => ({ r, i }));
@@ -79,5 +106,5 @@ const Pdf = (() => {
     }
     return buildPdf(out, landscape ? 841.89 : 595.28, landscape ? 595.28 : 841.89);
   }
-  return { report };
+  return { report, groupUnits };
 })();

@@ -142,6 +142,34 @@ const Compute = (() => {
       const parts = []; if (q.country_id && list[0]) parts.push('الدولة: ' + list[0].country_name); parts.push(kind === 'arrival' ? 'وصول' : kind === 'departure' ? 'مغادرة' : 'وصول ومغادرة'); if (q.flight) parts.push('الرحلة: ' + q.flight); if (day) parts.push('اليوم: ' + day + ' (' + dayAr(day) + ')'); if (q.airport) parts.push('المطار: ' + q.airport);
       return { cols: [C('i', '#', 6), C('name', 'الاسم', 40)], rows: list.map((v, i) => ({ i: i + 1, name: v.full_name })), subtitle: parts.join(' — ') };
     } },
+    group_visit: { roles: ['admin', 'event_manager', 'country_supervisor'], title: 'تقرير الزيارة حسب المجموعات', async build(rpc, u, q) {
+      const [fr, pr, vs] = await Promise.all([rpc('GET', '/flights', { event_id: q.event_id }), rpc('GET', '/persons', { event_id: q.event_id, country_id: q.country_id || '' }), rv(rpc, q)]);
+      const bd = {}; for (const p of pr.persons) if (p.visitor_id && p.birth_date) bd[p.visitor_id] = p.birth_date;
+      const ageOf = d => { if (!d || !/^\d{4}-\d\d-\d\d$/.test(d)) return null; const b = new Date(d + 'T00:00:00'), n = new Date(); let a = n.getFullYear() - b.getFullYear(); if (n.getMonth() < b.getMonth() || (n.getMonth() === b.getMonth() && n.getDate() < b.getDate())) a--; return a < 0 ? null : a; };
+      const isChild = v => { const a = ageOf(bd[v.id]); return a !== null && a < 15; };
+      const cid = q.country_id ? +q.country_id : 0; const flights = fr.flights.filter(f => (!cid || f.country_id === cid) && f.group_no);
+      const gm = new Map(); for (const f of flights) { const k = f.group_no.toLowerCase(); const g = gm.get(k) || { group_no: f.group_no, country: f.country_name || '', arrival: null, departure: null }; g[f.kind] = f; if (!g.country) g.country = f.country_name || ''; gm.set(k, g); }
+      const label = v => v.category === 'family_member' && v.head_name ? `عائلة ${v.head_name}` : v.category === 'group_member' && v.group_name ? `فوج ${v.group_name}` : '';
+      const order = list => { const out = [], seen = new Set(); const key = v => v.category === 'family_member' ? 'h' + v.head_id : v.category === 'family_head' ? 'h' + v.id : v.category === 'group_member' ? 'g' + v.group_id : 'i' + v.id;
+        const byKey = {}; for (const v of list) (byKey[key(v)] ||= []).push(v);
+        for (const v of list) { const k = key(v); if (seen.has(k)) continue; seen.add(k); out.push(...byKey[k].sort((a, b) => (b.category === 'family_head') - (a.category === 'family_head') || (b.is_leader ? 1 : 0) - (a.is_leader ? 1 : 0))); } return out; };
+      const mk = (g, list) => { const people = order(list).map(v => ({ name: v.full_name, rel: label(v), child: isChild(v) })); const kids = people.filter(x => x.child).length; return { ...g, people, total: people.length, adults: people.length - kids, children: kids }; };
+      const groups = [...gm.values()].sort((a, b) => a.group_no.localeCompare(b.group_no, 'ar', { numeric: true })).map(g => {
+        const ids = [g.arrival && g.arrival.id, g.departure && g.departure.id].filter(Boolean);
+        return mk(g, vs.filter(v => ids.includes(v.arrival_flight_id) || ids.includes(v.departure_flight_id))); });
+      const lone = vs.filter(v => !flights.some(f => f.id === v.arrival_flight_id || f.id === v.departure_flight_id));
+      if (lone.length) groups.push(mk({ group_no: '', country: '', arrival: null, departure: null, unlinked: true }, lone));
+      const fmt = (t, f) => f ? `${t}: ${[f.flight_date, f.airport && 'المطار: ' + f.airport, f.airline && 'شركة الطيران: ' + f.airline, f.flight_no && 'رقم الرحلة: ' + f.flight_no, f.flight_time && (t === 'رحلة الوصول' ? 'وقت الوصول: ' : 'وقت المغادرة: ') + f.flight_time].filter(Boolean).join(' — ')}` : '';
+      const tot = g => `المجموع: ${g.total} (${g.adults} بالغين - ${g.children} أطفال)`; const cols = [C('a', '#', 5), C('b', 'الاسم', 28), C('c', 'العائلة / الفوج', 22), C('d', '#', 5), C('e', 'الاسم', 28), C('f', 'العائلة / الفوج', 22)]; const rows = [];
+      for (const g of groups) {
+        const row = (a, st) => rows.push({ a, b: '', c: '', d: '', e: '', f: '', _style: st });
+        row(g.unlinked ? 'زوار غير مرتبطين برقم مجموعة' : `المجموعة رقم (${g.group_no})${g.country ? ' - ' + g.country : ''}`, 'sub'); if (g.arrival) row(fmt('رحلة الوصول', g.arrival)); if (g.departure) row(fmt('رحلة المغادرة', g.departure)); row(tot(g));
+        const h = Math.ceil(g.people.length / 2); for (let i = 0; i < h; i++) { const x = g.people[2 * i], y = g.people[2 * i + 1]; rows.push({ a: 2 * i + 1, b: x.name, c: x.rel, d: y ? 2 * i + 2 : '', e: y ? y.name : '', f: y ? y.rel : '' }); }
+        rows.push({ a: '', b: '', c: '', d: '', e: '', f: '' });
+      }
+      const all = groups.reduce((t, g) => ({ n: t.n + g.total, a: t.a + g.adults, c: t.c + g.children }), { n: 0, a: 0, c: 0 });
+      return { cols, rows, groups, subtitle: `${groups.length} مجموعة — الإجمالي ${all.n} (${all.a} بالغين - ${all.c} أطفال)` };
+    } },
     arrivals_departures: { roles: ['admin', 'event_manager', 'country_supervisor', 'transport'], title: 'كشف القادمين والمغادرين', async build(rpc, u, q) {
       const vs = await rv(rpc, q); const R = range(q); const rows = [];
       for (const v of vs) {
@@ -198,8 +226,8 @@ const Compute = (() => {
   async function report(rpc, u, type, q) {
     const def = REPORTS[type]; if (!def) throw notFound('تقرير غير معروف'); if (!def.roles.includes(u.role)) throw forbid();
     const ev = (await rpc('GET', '/events', {})).events.find(e => e.id === +q.event_id); if (!ev) throw Object.assign(new Error('يجب اختيار مناسبة صحيحة'), { status: 400, data: {} });
-    const { cols, rows, subtitle } = await def.build(rpc, u, { ...q, event_id: ev.id });
-    return { def, ev, cols, rows, subtitle };
+    const { cols, rows, subtitle, groups } = await def.build(rpc, u, { ...q, event_id: ev.id });
+    return { def, ev, cols, rows, subtitle, groups };
   }
   const reportList = u => Object.entries(REPORTS).filter(([, d]) => d.roles.includes(u.role)).map(([k, d]) => ({ key: k, title: d.title }));
   const api = { ROLE_LABELS, CAT_LABELS, dashboard, mealsData, stripPeople, transportDaily, transportSummary, report, reportList, isDate, today };
