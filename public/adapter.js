@@ -14,6 +14,7 @@ const Adapter = (() => {
 
   function tableBlob(name, columns, rows, format, extra) {
     if (format === 'csv') return new Blob([GX.toCsv(columns, rows)], { type: 'text/csv;charset=utf-8' });
+    rows = rows.map(r => r.map(c => typeof c === 'string' ? DT.text(c) : c)); if (extra && extra.head) extra = { ...extra, head: extra.head.map(h => DT.text(h)) };
     return new Blob([GX.buildXlsx([{ name, columns, rows, ...(extra || {}) }])], { type: XLSX_TYPE });
   }
   function parseDateCell(v) {
@@ -28,7 +29,7 @@ const Adapter = (() => {
   function parseTimeCell(v) {
     if (v === '' || v == null) return '';
     if (typeof v === 'number') { if (v >= 0 && v < 1) { const mins = Math.round(v * 1440); return `${String(Math.floor(mins / 60) % 24).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`; } return null; }
-    const m = /^(\d{1,2}):(\d{2})/.exec(String(v).trim()); if (!m) return null;
+    const m = /^(\d{1,2}):(\d{2})/.exec(DT.toLat(String(v).trim())); if (!m) return null;
     const s = `${m[1].padStart(2, '0')}:${m[2]}`; return /^([01]\d|2[0-3]):[0-5]\d$/.test(s) ? s : null;
   }
   async function parseUpload(buf) {
@@ -81,10 +82,10 @@ const Adapter = (() => {
       if (path.startsWith('/reports/')) {
         const r = await Compute.report(rpc, App.user, path.slice(9), q);
         rpc('POST', '/audit-event', {}, { action: 'report', entity: 'report', event_id: r.ev.id, details: { type: path.slice(9), rows: r.rows.length } }).catch(() => {});
-        if (q.format === 'csv' || q.format === 'xlsx') return tableBlob(r.def.title, r.cols.map(c => ({ label: c.label, width: Math.max(c.width || 12, 12) })), r.rows.map(x => r.cols.map(c => x[c.key] ?? '')), q.format, {
-          head: ['جاؤوك — ' + r.def.title, [r.ev.name, r.subtitle].filter(Boolean).join(' — '), 'أُعدّ بواسطة ' + App.user.name + ' — ' + new Date().toLocaleString('ar-EG')],
+        if (q.format === 'csv' || q.format === 'xlsx') return tableBlob(r.def.title, r.cols.map(c => ({ label: c.label, width: Math.min(60, Math.max(8, (c.label || '').length * 1.4 + 3, ...r.rows.map(x => String(DT.text(String(x[c.key] ?? ''))).length * 1.45 + 3).filter(n => c.nowrap || n < 45))) })), r.rows.map(x => r.cols.map(c => x[c.key] ?? '')), q.format, {
+          head: ['جاؤوك — ' + r.def.title, [r.ev.name, r.subtitle].filter(Boolean).join(' — '), 'أُعدّ بواسطة ' + App.user.name + ' — ' + DT.stamp()],
           rowMerge: r.rows.map(x => !!x._style), rowStyles: r.rows.map(x => x._style || (x.country === 'الإجمالي' || x.date === 'الإجمالي' ? 'total' : x.flight === 'إجمالي اليوم' ? 'sub' : null)) });
-        return { title: r.def.title, event: r.ev.name, subtitle: r.subtitle || '', scope_note: App.user.role === 'country_supervisor' ? 'بيانات دولتك فقط' : '', columns: r.cols, rows: r.rows, groups: r.groups, generated_by: App.user.name, generated_at: new Date().toISOString() };
+        return { title: r.def.title, event: r.ev.name, subtitle: DT.text(r.subtitle || ''), scope_note: App.user.role === 'country_supervisor' ? 'بيانات دولتك فقط' : '', columns: r.cols, rows: DT.deep(r.rows), groups: DT.deep(r.groups), meta: r.meta, generated_by: App.user.name, generated_at: new Date().toISOString() };
       }
       if (path === '/visitors-export') {
         const { visitors } = await rpc('GET', '/visitors', q);

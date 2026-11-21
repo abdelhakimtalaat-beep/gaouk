@@ -108,14 +108,22 @@ const Compute = (() => {
   const C = (key, label, width = 18) => ({ key, label, width });
   const dayAr = d => ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'][new Date(d + 'T00:00:00Z').getUTCDay()];
   const roomText = bs => bs.map(b => `${b.building_name} / ${b.floor_name} / ${b.room_number}`).join('، ');
+  // أعمار الزائرين: تُؤخذ من قاعدة البيانات (persons) بمطابقة الاسم والدولة؛ بالغ = 15 سنة فأكثر، طفل = أقل من 15، ومن لا تاريخ ميلاد له يُحسب بالغاً
+  const ageYears = d => { if (!d || !/^\d{4}-\d\d-\d\d$/.test(d)) return null; const b = new Date(d + 'T00:00:00'), n = new Date(); let a = n.getFullYear() - b.getFullYear(); if (n.getMonth() < b.getMonth() || (n.getMonth() === b.getMonth() && n.getDate() < b.getDate())) a--; return a < 0 ? null : a; };
+  async function bdMap(rpc, q) { try { const m = {}; for (const p of (await rpc('GET', '/persons', { event_id: q.event_id, country_id: q.country_id || '' })).persons) if (p.visitor_id && p.birth_date) m[p.visitor_id] = p.birth_date; return m; } catch (_) { return {}; } }
+  const kidOf = bd => v => { const a = ageYears(bd[v.id]); return a !== null && a < 15; };
+  const cnt = (list, kid) => { const c = list.filter(kid).length; return { n: list.length, a: list.length - c, c }; };
+  const cntTxt = x => `${x.n} (${x.a} بالغين - ${x.c} أطفال)`;
   const rv = (rpc, q, country) => loadVisitors(rpc, { event_id: q.event_id, country_id: country || q.country_id });
   const REPORTS = {
     visitors_all: { roles: ['admin', 'event_manager', 'country_supervisor', 'transport', 'catering'], title: 'كشف كامل بأسماء الزائرين', async build(rpc, u, q) {
-      const cols = [C('i', '#', 5), C('name', 'الاسم', 26), C('country', 'الدولة', 14), C('cat', 'التصنيف', 13), C('rel', 'رب الأسرة / الفوج', 22), C('phone', 'الهاتف', 17), C('ad', 'الوصول', 12), C('at', 'الوقت', 8), C('dd', 'المغادرة', 12), C('dt', 'وقت المغادرة', 10), C('flight', 'رحلة الوصول', 16), C('airport', 'مطار الوصول', 14), C('dflight', 'رحلة المغادرة', 16), C('dairport', 'مطار المغادرة', 14), C('room', 'الغرفة', 28), C('driver', 'السائق', 18), C('notes', 'ملاحظات', 20)];
-      const rows = (await rv(rpc, q)).map((v, i) => ({ i: i + 1, name: v.full_name, country: v.country_name, cat: CAT_LABELS[v.category], rel: v.head_name || v.group_name || '', phone: v.phone, ad: v.arrival_date, at: v.arrival_time, dd: v.departure_date, dt: v.departure_time, dflight: [v.dep_airline, v.dep_flight_no].filter(Boolean).join(' '), dairport: v.dep_airport,
+      const bd = await bdMap(rpc, q);
+      const cols = [C('i', '#', 5), C('name', 'الاسم', 26), C('country', 'الدولة', 14), C('cat', 'التصنيف', 13), C('age', 'العمر', 8), C('rel', 'رب الأسرة / الفوج', 22), C('phone', 'الهاتف', 17), C('ad', 'الوصول', 12), C('at', 'الوقت', 8), C('dd', 'المغادرة', 12), C('dt', 'وقت المغادرة', 10), C('flight', 'رحلة الوصول', 16), C('airport', 'مطار الوصول', 14), C('dflight', 'رحلة المغادرة', 16), C('dairport', 'مطار المغادرة', 14), C('room', 'الغرفة', 28), C('driver', 'السائق', 18), C('notes', 'ملاحظات', 20)];
+      const rows = (await rv(rpc, q)).map((v, i) => ({ i: i + 1, name: v.full_name, country: v.country_name, cat: CAT_LABELS[v.category], age: ageYears(bd[v.id]) ?? '', rel: v.head_name || v.group_name || '', phone: v.phone, ad: v.arrival_date, at: v.arrival_time, dd: v.departure_date, dt: v.departure_time, dflight: [v.dep_airline, v.dep_flight_no].filter(Boolean).join(' '), dairport: v.dep_airport,
         flight: [v.airline, v.flight_no].filter(Boolean).join(' '), airport: v.airport, room: roomText(v.bookings), driver: v.transports.filter(t => t.kind === 'pickup').map(t => `${t.driver_name} (${t.car_number})`).join('، '), notes: [v.diet_notes, v.notes].filter(Boolean).join(' | ') }));
       return { cols, rows };
-    } },
+    },
+      sorts: [{ key: 'arr', label: 'موعد الوصول', by: r => [r.ad || '~', r.at || '~'] }, { key: 'dep', label: 'موعد المغادرة', by: r => [r.dd || '~', r.dt || '~'] }, { key: 'kind', label: 'أفراد / عائلات / أفواج', by: r => ['فرد', 'رب أسرة', 'تابع لأسرة', 'عضو في فوج'].indexOf(r.cat) } ] },
     by_country: { roles: ['admin', 'event_manager', 'country_supervisor'], title: 'إحصاء الزائرين حسب الدولة', async build(rpc, u, q) {
       const vs = await rv(rpc, q); const m = {};
       for (const v of vs) { const r = m[v.country_name] ||= { country: v.country_name, total: 0, ind: 0, fam: 0, mem: 0, grp: 0, housed: 0, unhoused: 0 };
@@ -125,15 +133,14 @@ const Compute = (() => {
       return { cols: [C('country', 'الدولة'), C('total', 'إجمالي الزائرين', 14), C('ind', 'أفراد', 10), C('fam', 'عائلات (أرباب)', 14), C('mem', 'تابعون', 10), C('grp', 'أعضاء أفواج', 12), C('housed', 'تم تسكينهم', 12), C('unhoused', 'لم يُسكنوا', 12)], rows };
     } },
     families_groups: { roles: ['admin', 'event_manager', 'country_supervisor'], title: 'كشف العائلات والأفواج', async build(rpc, u, q) {
-      const vs = await rv(rpc, q); const rows = [];
-      for (const h of vs.filter(v => v.category === 'family_head')) { const mem = vs.filter(v => v.head_id === h.id);
-        rows.push({ type: 'عائلة', name: h.full_name, country: h.country_name, leader: h.full_name, count: 1 + mem.length, ad: h.arrival_date, dd: h.departure_date, rooms: roomText([...h.bookings, ...mem.flatMap(m => m.bookings)].filter((b, i, a) => a.findIndex(x => x.room_id === b.room_id) === i)), members: mem.map(m => m.full_name).join('، ') }); }
+      const [vs, bd] = await Promise.all([rv(rpc, q), bdMap(rpc, q)]); const kid = kidOf(bd); const rows = [];
+      for (const h of vs.filter(v => v.category === 'family_head')) { const mem = vs.filter(v => v.head_id === h.id); const c = cnt([h, ...mem], kid);
+        rows.push({ type: 'عائلة', name: h.full_name, country: h.country_name, count: cntTxt(c), _n: c.n, ad: h.arrival_date, dd: h.departure_date, rooms: roomText([...h.bookings, ...mem.flatMap(m => m.bookings)].filter((b, i, a) => a.findIndex(x => x.room_id === b.room_id) === i)) }); }
       const groups = {}; for (const v of vs.filter(x => x.category === 'group_member')) (groups[v.group_id] ||= []).push(v);
-      for (const list of Object.values(groups)) { const f = list[0]; const lead = list.find(x => x.is_leader);
-        rows.push({ type: 'فوج', name: f.group_name, country: f.country_name, leader: lead ? lead.full_name : (f.guide_name || ''), count: list.length, ad: f.arrival_date, dd: f.departure_date,
-          rooms: roomText(list.flatMap(m => m.bookings).filter((b, i, a) => a.findIndex(x => x.room_id === b.room_id) === i)), members: list.map(m => m.full_name).join('، ') }); }
-      return { cols: [C('type', 'النوع', 9), C('name', 'الاسم / الفوج', 24), C('country', 'الدولة', 14), C('leader', 'رب الأسرة / القائد', 22), C('count', 'العدد', 8), C('ad', 'الوصول', 12), C('dd', 'المغادرة', 12), C('rooms', 'الغرف', 34), C('members', 'الأفراد', 44)], rows };
-    } },
+      for (const list of Object.values(groups)) { const f = list[0]; const c = cnt(list, kid);
+        rows.push({ type: 'فوج', name: f.group_name, country: f.country_name, count: cntTxt(c), _n: c.n, ad: f.arrival_date, dd: f.departure_date, rooms: roomText(list.flatMap(m => m.bookings).filter((b, i, a) => a.findIndex(x => x.room_id === b.room_id) === i)) }); }
+      return { cols: [C('type', 'النوع', 9), C('name', 'الاسم / الفوج', 24), C('country', 'الدولة', 14), C('count', 'عدد الأفراد', 24), C('ad', 'الوصول', 12), C('dd', 'المغادرة', 12), C('rooms', 'الغرف', 34)], rows };
+    }, sorts: [{ key: 'size', label: 'عدد الأفراد (الأكبر أولاً)', by: r => -r._n }] },
     passenger_list: { roles: ['admin', 'event_manager', 'country_supervisor', 'transport'], title: 'قائمة المسافرين (الأسماء فقط)', async build(rpc, u, q) {
       const vs = await rv(rpc, q); const norm = x => String(x || '').trim().toLowerCase(); const kind = q.kind || '', fl = norm(q.flight), day = q.day || '', ap = norm(q.airport);
       const side = (v, k) => k === 'arrival' ? { no: norm(v.flight_no), date: v.arrival_date, ap: norm(v.airport) } : { no: norm(v.dep_flight_no), date: v.departure_date, ap: norm(v.dep_airport) };
@@ -142,11 +149,8 @@ const Compute = (() => {
       const parts = []; if (q.country_id && list[0]) parts.push('الدولة: ' + list[0].country_name); parts.push(kind === 'arrival' ? 'وصول' : kind === 'departure' ? 'مغادرة' : 'وصول ومغادرة'); if (q.flight) parts.push('الرحلة: ' + q.flight); if (day) parts.push('اليوم: ' + day + ' (' + dayAr(day) + ')'); if (q.airport) parts.push('المطار: ' + q.airport);
       return { cols: [C('i', '#', 6), C('name', 'الاسم', 40)], rows: list.map((v, i) => ({ i: i + 1, name: v.full_name })), subtitle: parts.join(' — ') };
     } },
-    group_visit: { roles: ['admin', 'event_manager', 'country_supervisor'], title: 'تقرير الزيارة حسب المجموعات', async build(rpc, u, q) {
-      const [fr, pr, vs] = await Promise.all([rpc('GET', '/flights', { event_id: q.event_id }), rpc('GET', '/persons', { event_id: q.event_id, country_id: q.country_id || '' }), rv(rpc, q)]);
-      const bd = {}; for (const p of pr.persons) if (p.visitor_id && p.birth_date) bd[p.visitor_id] = p.birth_date;
-      const ageOf = d => { if (!d || !/^\d{4}-\d\d-\d\d$/.test(d)) return null; const b = new Date(d + 'T00:00:00'), n = new Date(); let a = n.getFullYear() - b.getFullYear(); if (n.getMonth() < b.getMonth() || (n.getMonth() === b.getMonth() && n.getDate() < b.getDate())) a--; return a < 0 ? null : a; };
-      const isChild = v => { const a = ageOf(bd[v.id]); return a !== null && a < 15; };
+    group_visit: { roles: ['admin', 'event_manager', 'country_supervisor'], title: 'تقرير الزيارة حسب المجموعات', custom: true, async build(rpc, u, q) {
+      const [fr, bd, vs] = await Promise.all([rpc('GET', '/flights', { event_id: q.event_id }), bdMap(rpc, q), rv(rpc, q)]); const isChild = kidOf(bd);
       const cid = q.country_id ? +q.country_id : 0; const flights = fr.flights.filter(f => (!cid || f.country_id === cid) && f.group_no);
       const gm = new Map(); for (const f of flights) { const k = f.group_no.toLowerCase(); const g = gm.get(k) || { group_no: f.group_no, country: f.country_name || '', arrival: null, departure: null }; g[f.kind] = f; if (!g.country) g.country = f.country_name || ''; gm.set(k, g); }
       const label = v => v.category === 'family_member' && v.head_name ? `عائلة ${v.head_name}` : v.category === 'group_member' && v.group_name ? `فوج ${v.group_name}` : '';
@@ -180,20 +184,22 @@ const Compute = (() => {
       return { cols: [C('date', 'التاريخ', 12), C('type', 'النوع', 9), C('time', 'الوقت', 8), C('name', 'الاسم', 26), C('country', 'الدولة', 14), C('flight', 'الرحلة', 18), C('airport', 'المطار', 16), C('driver', 'السائق', 18)], rows, subtitle: rangeText(R) };
     } },
     arrivals_counts: { roles: ['admin', 'event_manager', 'country_supervisor', 'transport'], title: 'القادمون والمغادرون — أعداد حسب اليوم والرحلة', async build(rpc, u, q) {
-      const vs = await rv(rpc, q); const R = range(q); const m = new Map();
-      const add = (date, flight, airport, k) => { const key = date + '|' + flight + '|' + airport; const r = m.get(key) || { date, flight, airport, arr: 0, dep: 0 }; r[k]++; m.set(key, r); };
+      const [vs, bd] = await Promise.all([rv(rpc, q), bdMap(rpc, q)]); const kid = kidOf(bd); const R = range(q); const m = new Map();
+      const add = (date, flight, airport, country, v, k) => { const key = [date, flight, airport, country].join('|'); const r = m.get(key) || { date, flight, airport, country, arr: [], dep: [] }; r[k].push(v); m.set(key, r); };
       for (const v of vs) {
-        if (inRange(v.arrival_date, R)) add(v.arrival_date, [v.airline, v.flight_no].filter(Boolean).join(' ') || 'بدون رحلة', v.airport || '', 'arr');
-        if (inRange(v.departure_date, R)) add(v.departure_date, [v.dep_airline, v.dep_flight_no].filter(Boolean).join(' ') || '—', v.dep_airport || '', 'dep');
+        if (inRange(v.arrival_date, R)) add(v.arrival_date, [v.airline, v.flight_no].filter(Boolean).join(' ') || 'بدون رحلة', v.airport || '', v.country_name, v, 'arr');
+        if (inRange(v.departure_date, R)) add(v.departure_date, [v.dep_airline, v.dep_flight_no].filter(Boolean).join(' ') || '—', v.dep_airport || '', v.country_name, v, 'dep');
       }
-      const days = [...new Set([...m.values()].map(r => r.date))].sort(); const rows = []; let A = 0, D = 0;
+      const days = [...new Set([...m.values()].map(r => r.date))].sort(); const rows = []; let A = [], D = [];
+      const line = (date, flight, airport, country, a, d) => ({ date, flight, airport, country, arr: cntTxt(cnt(a, kid)), dep: cntTxt(cnt(d, kid)), total: cntTxt(cnt([...a, ...d], kid)), _a: a.length, _d: d.length });
       for (const d of days) {
-        const list = [...m.values()].filter(r => r.date === d).sort((a, b) => (a.flight === '—') - (b.flight === '—') || a.flight.localeCompare(b.flight));
-        let sa = 0, sd = 0; for (const r of list) { rows.push({ date: d, day: dayAr(d), flight: r.flight, airport: r.airport, arr: r.arr, dep: r.dep, total: r.arr + r.dep }); sa += r.arr; sd += r.dep; }
-        rows.push({ date: d, day: '', flight: 'إجمالي اليوم', airport: '', arr: sa, dep: sd, total: sa + sd }); A += sa; D += sd;
+        const list = [...m.values()].filter(r => r.date === d).sort((a, b) => (a.flight === '—') - (b.flight === '—') || a.flight.localeCompare(b.flight) || a.country.localeCompare(b.country, 'ar'));
+        const dayTxt = `${dayAr(d)} ${d}`; let sa = [], sd = [];
+        for (const r of list) { rows.push(line(dayTxt, r.flight, r.airport, r.country, r.arr, r.dep)); sa = sa.concat(r.arr); sd = sd.concat(r.dep); }
+        rows.push(line(dayTxt, 'إجمالي اليوم', '', '', sa, sd)); A = A.concat(sa); D = D.concat(sd);
       }
-      if (days.length) rows.push({ date: 'الإجمالي', day: '', flight: '', airport: '', arr: A, dep: D, total: A + D });
-      return { cols: [C('date', 'التاريخ', 13), C('day', 'اليوم', 11), C('flight', 'الرحلة', 22), C('airport', 'المطار', 16), C('arr', 'عدد القادمين', 13), C('dep', 'عدد المغادرين', 13), C('total', 'المجموع', 10)], rows, subtitle: rangeText(R) };
+      if (days.length) rows.push(line('الإجمالي', '', '', '', A, D));
+      return { cols: [C('date', 'اليوم', 22), C('country', 'الدولة', 14), C('flight', 'الرحلة', 22), C('airport', 'المطار', 16), C('arr', 'عدد القادمين', 24), C('dep', 'عدد المغادرين', 24), C('total', 'المجموع', 24)], rows, subtitle: rangeText(R) };
     } },
     housing: { roles: HOUSERS, title: 'كشف تسكين المباني والأدوار', async build(rpc, u, q) {
       let bs = (await rpc('GET', '/bookings', { event_id: q.event_id })).bookings;
@@ -223,11 +229,32 @@ const Compute = (() => {
       return { cols: [C('name', 'الاسم', 22), C('role', 'الصفة', 14), C('phone', 'الهاتف', 16), C('scope', 'المسؤولية', 50), C('status', 'الحالة', 9), C('notes', 'ملاحظات', 24)], rows };
     } },
   };
+  // تصفية وترتيب وإخفاء أعمدة وترقيم: تُطبَّق على نتيجة التقرير قبل العرض والـPDF وExcel
+  const isTot = r => r.country === 'الإجمالي' || r.date === 'الإجمالي' || r.flight === 'إجمالي اليوم';
+  const sv = v => v === null || v === undefined ? '' : String(v);
+  const cmpv = (a, b) => { if (Array.isArray(a)) { for (let i = 0; i < a.length; i++) { const c = cmpv(a[i], b[i]); if (c) return c; } return 0; } const ea = a === '' || a == null, eb = b === '' || b == null; if (ea || eb) return ea === eb ? 0 : ea ? 1 : -1; if (typeof a === 'number' && typeof b === 'number') return a - b; return String(a).localeCompare(String(b), 'ar', { numeric: true }); };
+  function refine(def, cols, rows, subtitle, q) {
+    const sorts = [...(def.sorts || []).map(x => ({ key: x.key, label: x.label })), ...cols.filter(c => c.key !== 'i').map(c => ({ key: c.key, label: c.label }))];
+    const meta = { columns: cols.filter(c => c.key !== 'i').map(c => ({ key: c.key, label: c.label })), sorts, values: {} };
+    for (const c of cols) { const set = new Set(rows.filter(r => !isTot(r)).map(r => sv(r[c.key])).filter(Boolean)); meta.values[c.key] = set.size <= 120 ? [...set].sort(cmpv) : null; }
+    const notes = []; const lab = k => (cols.find(c => c.key === k) || {}).label || k; const search = String(q.search || '').trim(); const fcol = q.fcol && cols.some(c => c.key === q.fcol) ? q.fcol : '', fval = q.fval || '';
+    const filtered = !!(fcol && fval) || !!search; if (filtered) rows = rows.filter(r => !isTot(r));
+    if (fcol && fval) { rows = rows.filter(r => sv(r[fcol]) === fval); notes.push(`التصفية: ${lab(fcol)} = ${fval}`); }
+    if (search) { rows = rows.filter(r => cols.some(c => sv(r[c.key]).includes(search))); notes.push(`بحث: ${search}`); }
+    const ex = (def.sorts || []).find(x => x.key === q.sort); const by = ex ? ex.by : cols.some(c => c.key === q.sort) ? (r => r[q.sort]) : null;
+    if (by) { const dir = q.sdir === 'desc' ? -1 : 1; const body = rows.filter(r => !isTot(r)).map((r, i) => [r, i]).sort((a, b) => dir * cmpv(by(a[0]), by(b[0])) || a[1] - b[1]).map(x => x[0]); const tail = filtered ? [] : rows.filter(r => r.country === 'الإجمالي' || r.date === 'الإجمالي'); rows = body.concat(tail); notes.push(`الترتيب: ${(sorts.find(x => x.key === q.sort) || {}).label}${dir < 0 ? ' (تنازلي)' : ''}`); }
+    const hide = String(q.hide || '').split(',').filter(Boolean); let shown = cols.filter(c => c.key !== 'i' && !hide.includes(c.key)); if (!shown.length) shown = cols.filter(c => c.key !== 'i');
+    if (hide.length && shown.length < cols.length - (cols.some(c => c.key === 'i') ? 1 : 0)) notes.push(`أعمدة مخفية: ${hide.map(lab).join('، ')}`);
+    let n = 0; rows = rows.map(r => ({ ...r, sn: isTot(r) ? '' : ++n }));
+    cols = [C('sn', '#', 6), ...shown].map(c => ({ ...c, nowrap: /الاسم|المقيم|الزائر/.test(c.label) || rows.every(r => sv(r[c.key]).length <= 26) }));
+    return { cols, rows, subtitle: [subtitle, ...notes].filter(Boolean).join(' — '), meta };
+  }
   async function report(rpc, u, type, q) {
     const def = REPORTS[type]; if (!def) throw notFound('تقرير غير معروف'); if (!def.roles.includes(u.role)) throw forbid();
     const ev = (await rpc('GET', '/events', {})).events.find(e => e.id === +q.event_id); if (!ev) throw Object.assign(new Error('يجب اختيار مناسبة صحيحة'), { status: 400, data: {} });
-    const { cols, rows, subtitle, groups } = await def.build(rpc, u, { ...q, event_id: ev.id });
-    return { def, ev, cols, rows, subtitle, groups };
+    let { cols, rows, subtitle, groups } = await def.build(rpc, u, { ...q, event_id: ev.id }); let meta = null;
+    if (!def.custom) ({ cols, rows, subtitle, meta } = refine(def, cols, rows, subtitle, q));
+    return { def, ev, cols, rows, subtitle, groups, meta };
   }
   const reportList = u => Object.entries(REPORTS).filter(([, d]) => d.roles.includes(u.role)).map(([k, d]) => ({ key: k, title: d.title }));
   const api = { ROLE_LABELS, CAT_LABELS, dashboard, mealsData, stripPeople, transportDaily, transportSummary, report, reportList, isDate, today };

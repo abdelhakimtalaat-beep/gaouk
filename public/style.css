@@ -278,3 +278,18 @@ td{border-bottom:1px solid #edf1de}
 
 .curev{background:var(--gold,#f5c518);color:#12361f;padding:5px 12px;border-radius:999px;display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.95rem}
 .curev .muted{color:#12361f;opacity:.75}
+
+/* حقول التاريخ والوقت (يوم/شهر/عام بأرقام عربية) */
+.dt-wrap{position:relative;display:flex;align-items:center;gap:6px;width:100%}
+.dt-wrap .dt-vis{flex:1;min-width:0;text-align:center;letter-spacing:.5px}
+.dt-btn{cursor:pointer;user-select:none;font-size:1.1rem;padding:4px 6px;border:1px solid #d6dcc0;border-radius:8px;background:#fff;line-height:1}
+.dt-btn:hover{background:#f4faee}
+input.dt-real{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;inset-inline-end:0;bottom:0;min-height:0;padding:0;border:0}
+.filters .dt-wrap{width:auto}
+table.sub{width:100%;font-size:.95rem}table.sub th,table.sub td{padding:6px 8px;border-bottom:1px solid #e3e8df;text-align:right}
+
+/* جداول التقارير: خط أكبر وسميك وتوسيط، والاسم في سطر واحد */
+#sheet table.rep{font-size:1.08rem;font-weight:700}
+#sheet table.rep th,#sheet table.rep td{text-align:center;vertical-align:middle;padding:9px 10px}
+#sheet table.rep td.nw{white-space:nowrap}
+#gv{font-weight:700;font-size:1.05rem}

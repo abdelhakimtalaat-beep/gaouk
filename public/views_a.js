@@ -101,7 +101,7 @@ App.view('visitors', async (page, ctx) => {
     const vs = r.visitors; App._vlist = vs;
     $('#vlist').innerHTML = `<div class="muted small" style="margin-bottom:6px">${vs.length} سجل${vs.length >= 5000 ? ' (تم عرض أول 5000)' : ''}</div><div class="table-wrap"><table><thead><tr><th>الاسم</th><th>الدولة</th><th>الهاتف</th><th>العائلة / الفوج</th><th>الوصول</th><th>المغادرة</th><th>الرحلة</th><th>الغرفة</th><th>السائق</th><th></th></tr></thead><tbody>
       ${vs.map(v => `<tr class="${v.category === 'family_member' ? 'sub' : ''}"><td><a href="#" data-view="${v.id}"><b>${esc(v.full_name)}</b></a><br><span class="badge ${v.category === 'family_head' ? 'info' : ''}">${CAT[v.category]}${v.is_leader ? ' — قائد' : ''}${v.members_count ? ' (+' + v.members_count + ')' : ''}</span></td>
-      <td>${esc(v.country_name)}</td><td><span class="ltr">${esc(v.phone)}</span></td><td>${esc(v.head_name || v.group_name || '')}${v.guide_name ? `<div class="muted small">المرشد: ${esc(v.guide_name)}</div>` : ''}</td>
+      <td>${esc(v.country_name)}</td><td>${[v.phone, v.phone2].filter(Boolean).map(x => `<div class="ltr">${esc(x)}</div>`).join('')}</td><td>${esc(v.head_name || v.group_name || '')}${v.guide_name ? `<div class="muted small">المرشد: ${esc(v.guide_name)}</div>` : ''}</td>
       <td>${v.arrival_date ? fmtDate(v.arrival_date, v.arrival_time) : '<span class="badge warn">ناقص</span>'}</td><td>${v.departure_date ? fmtDate(v.departure_date, v.departure_time) : '<span class="badge warn">ناقص</span>'}${v.dep_flight_no ? `<div class="muted small">${esc([v.dep_airline, v.dep_flight_no].filter(Boolean).join(' '))}${v.dep_airport ? ' — ' + esc(v.dep_airport) : ''}</div>` : ''}</td>
       <td>${esc([v.airline, v.flight_no].filter(Boolean).join(' '))}${v.airport ? `<div class="muted small">${esc(v.airport)}</div>` : ''}</td>
       <td>${v.bookings.length ? v.bookings.map(b => `<span class="badge free">${esc(roomLabel(b))}</span>`).join('<br>') : '<span class="badge gray">لم يُسكن</span>'}</td>
@@ -123,7 +123,13 @@ App.view('visitors', async (page, ctx) => {
   if (writer) {
     $('#addv').onclick = () => visitorForm(null, groups, load);
     $('#addng').onclick = () => groupForm(null, () => App.refresh());
-    $('#addfromdb').onclick = async () => { const p = await pickPerson(); if (p) visitorForm(null, groups, load, { full_name: p.full_name, country_id: p.country_id, category: p.category === 'group_leader' ? 'group_member' : p.category, is_leader: p.category === 'group_leader' }); };
+    $('#addfromdb').onclick = async () => { const p = await pickPerson(); if (!p) return;
+      const pre = { full_name: p.full_name, country_id: p.country_id, phone: p.phone, phone2: p.phone2, category: p.category === 'group_leader' ? 'group_member' : p.category, is_leader: p.category === 'group_leader' };
+      if (p.category === 'family_member' && p.head_id) { // ربط تلقائي برب الأسرة: يُسجَّل رب الأسرة في المناسبة إن لم يكن موجوداً
+        try { const all = (await api('GET', '/persons?event_id=' + App.eventId)).persons; const hp = all.find(x => x.id === p.head_id);
+          if (hp) { let hid = hp.visitor_id; if (!hid) { hid = (await api('POST', '/visitors', { event_id: App.eventId, full_name: hp.full_name, country_id: hp.country_id, phone: hp.phone, phone2: hp.phone2, category: 'family_head', needs_transport: true })).id; toast('سُجّل رب الأسرة «' + hp.full_name + '» في المناسبة'); }
+            pre.head = { id: hid, full_name: hp.full_name, country_id: hp.country_id, country_name: hp.country_name }; } } catch (e) { toast('تعذّر ربط رب الأسرة تلقائياً: ' + e.message, 'warn'); } }
+      visitorForm(null, groups, load, pre); };
     $('#expv').onclick = () => download('/visitors-export?' + qs({ event_id: App.eventId, ...f, format: 'xlsx' }), `gaouk-visitors-${todayStr()}.xlsx`);
     $('#impv').onclick = () => importDialog(load);
   }
@@ -132,7 +138,7 @@ App.view('visitors', async (page, ctx) => {
 
 function groupsTab(page, head, groups, writer, ctx) {
   page.innerHTML = head + `<div class="row" style="margin-bottom:10px">${writer ? '<button class="btn" id="addg">+ فوج جديد</button>' : ''}</div><div class="table-wrap"><table><thead><tr><th>الفوج</th><th>الدولة</th><th>القائد / المرشد</th><th>البلد</th><th>رجال / نساء / أطفال</th><th>العدد المعلن</th><th>المسجل</th><th>الوصول</th><th>المغادرة</th><th></th></tr></thead><tbody>
-    ${groups.map(g => `<tr><td><b>${esc(g.name)}</b></td><td>${esc(g.country_name)}</td><td>${esc(g.leader_name)}</td><td>${esc(g.city)}</td><td>${g.men_count} / ${g.women_count} / ${g.children_count}</td><td>${g.members_count}</td><td>${g.registered} ${g.members_count && g.registered < g.members_count ? '<span class="badge warn">ناقص</span>' : ''}</td><td>${fmtDate(g.arrival_date, g.arrival_time)}</td><td>${fmtDate(g.departure_date, g.departure_time)}</td>
+    ${groups.map(g => `<tr><td><b>${esc(g.name)}</b></td><td>${esc(g.country_name)}</td><td>${esc(g.leader_name)}${[g.leader_phone, g.leader_phone2].filter(Boolean).map(x => `<div class="ltr small">${esc(x)}</div>`).join('')}</td><td>${esc(g.city)}</td><td>${g.men_count} / ${g.women_count} / ${g.children_count}</td><td>${g.members_count}</td><td>${g.registered} ${g.members_count && g.registered < g.members_count ? '<span class="badge warn">ناقص</span>' : ''}</td><td>${fmtDate(g.arrival_date, g.arrival_time)}</td><td>${fmtDate(g.departure_date, g.departure_time)}</td>
     <td class="actions">${writer ? `<button class="btn sm sec" data-ge="${g.id}">تعديل</button> <button class="btn sm danger" data-gd="${g.id}">حذف</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="10" class="empty">لا توجد أفواج</td></tr>'}</tbody></table></div>
     <p class="muted small">لتسجيل أعضاء الفوج: أضف زائراً جديداً واختر التصنيف «عضو في فوج» ثم الفوج. العائلات تُسجَّل برب الأسرة وتابعيه من نموذج الزائر.</p>`;
   if (writer) $('#addg').onclick = () => groupForm(null, () => App.refresh());
@@ -146,6 +152,7 @@ function groupForm(g, done) {
   const body = `<form id="gf"><div class="fgrid"><div class="field"><label>دولة المنشأ *</label><select name="country_id" required>${countryOpts(g?.country_id ?? (App.countries.length === 1 ? App.countries[0].id : ''), 'اختر…')}</select></div>
     <div class="field"><label>البلد</label><input name="city" value="${esc(g?.city)}"></div>
     <div class="field"><label>المسئول (قائد الفوج / المرشد)</label><input name="leader_name" value="${esc(g?.leader_name)}"></div>
+    <div class="field"><label>رقم هاتف المسئول 1</label><input name="leader_phone" dir="ltr" style="text-align:right" value="${esc(g?.leader_phone)}"></div><div class="field"><label>رقم هاتف المسئول 2</label><input name="leader_phone2" dir="ltr" style="text-align:right" value="${esc(g?.leader_phone2)}"></div>
     <div class="field"><label>اسم / رقم الفوج (اختياري)</label><input name="name" value="${esc(g?.name)}" placeholder="يُولَّد تلقائياً إن تُرك فارغاً"></div>
     <div class="field"><label>عدد البالغين رجال</label><input type="number" min="0" name="men_count" value="${esc(g?.men_count || '')}"></div>
     <div class="field"><label>عدد البالغين نساء</label><input type="number" min="0" name="women_count" value="${esc(g?.women_count || '')}"></div>
@@ -172,6 +179,7 @@ function visitorForm(v, groups, done, pre) {
     <div class="fgrid"><div class="field full"><label>الاسم الكامل *</label><input name="full_name" required value="${esc(v?.full_name ?? pre.full_name)}"></div>
     ${isMember ? '' : `<div class="field" id="cfield"><label>الدولة *</label><select name="country_id" required>${countryOpts(v?.country_id ?? pre.country_id ?? (countries.length === 1 ? countries[0].id : ''), 'اختر…')}</select></div>
     <div class="field"><label>التصنيف *</label><select name="category">${opts(Object.entries(CAT), cat)}</select></div>`}
+    <div class="field"><label>رقم الهاتف 1</label><input name="phone" dir="ltr" style="text-align:right" value="${esc(v?.phone ?? pre.phone)}"></div><div class="field"><label>رقم الهاتف 2</label><input name="phone2" dir="ltr" style="text-align:right" value="${esc(v?.phone2 ?? pre.phone2)}"></div>
     ${isMember ? `<div class="field"><label>صلة القرابة</label><input name="relation" value="${esc(v?.relation)}"></div>` : ''}</div>
     ${isMember ? '<div class="alert info">بيانات السفر والدولة لهذا التابع تُؤخذ من رب الأسرة.</div>' : `
     <div id="headbox" class="fgrid" hidden><div class="field"><label>رب الأسرة *</label><div class="row"><b id="headname" class="badge ok" style="font-size:.95rem">—</b><button type="button" class="btn sec sm" id="pickhead">اختيار / تغيير رب الأسرة</button></div></div>
@@ -186,7 +194,7 @@ function visitorForm(v, groups, done, pre) {
   const mrow = m => `<div class="mrow" data-id="${m?.id || ''}"><input placeholder="الاسم الكامل" data-k="full_name" value="${esc(m?.full_name)}"><input placeholder="صلة القرابة" data-k="relation" value="${esc(m?.relation)}"><button type="button" class="btn sm danger" data-rm>×</button></div>`;
   const m = modal({ title: isNew ? 'زائر جديد' : 'تعديل: ' + v.full_name, width: 860, body, buttons: [{ label: isNew ? 'حفظ' : 'حفظ التعديلات', onClick: async mm => save(mm, false) }, { label: 'إلغاء', cls: 'sec', close: true }] });
   const F = $('#vf', m.el);
-  let headId = null, headCountry = '', prevCat = cat;
+  let headId = pre.head ? pre.head.id : null, headCountry = pre.head ? pre.head.country_id : '', prevCat = cat;
   const sync = () => { const c = F.category?.value; if ($('#grpbox', m.el)) $('#grpbox', m.el).hidden = c !== 'group_member';
     if ($('#headbox', m.el)) { const fm = c === 'family_member'; $('#headbox', m.el).hidden = !fm; $('#travbox', m.el).hidden = fm; $('#cfield', m.el).hidden = fm; F.country_id.disabled = fm; } $('#fambox', m.el).hidden = c !== 'family_head' && !(v && v.category === 'family_head'); $('#famcount', m.el).textContent = 1 + $$('.mrow', m.el).length; };
   members.forEach(x => $('#mrows', m.el).insertAdjacentHTML('beforeend', mrow(x)));
@@ -194,7 +202,7 @@ function visitorForm(v, groups, done, pre) {
   $('#addm', m.el).onclick = () => { $('#mrows', m.el).insertAdjacentHTML('beforeend', mrow()); sync(); $$('.mrow input', m.el).pop().focus(); };
   m.el.onclick = e => { const r = e.target.closest('[data-rm]'); if (r) { r.closest('.mrow').remove(); sync(); } };
   const showHead = () => { const h = headRef.cur; $('#headname', m.el).textContent = h ? `${h.full_name} (${h.country_name})` : 'لم يُحدَّد بعد'; };
-  const headRef = { cur: null };
+  const headRef = { cur: pre.head || null };
   async function chooseHead() {
     const h = await pickHead(); if (!h) return false;
     headRef.cur = h; headId = h.id; headCountry = h.country_id; showHead(); check(); return true;
@@ -204,7 +212,7 @@ function visitorForm(v, groups, done, pre) {
     prevCat = F.category.value; sync();
   };
   if ($('#pickhead', m.el)) $('#pickhead', m.el).onclick = chooseHead;
-  sync();
+  sync(); if (pre.head) showHead();
   let flights = [];
   const fdesc = (f, k) => f ? `<div><b>${k}:</b> ${esc([f.airline, f.flight_no].filter(Boolean).join(' '))}${f.airport ? ' — ' + esc(f.airport) : ''}${f.flight_date ? ' — ' + esc(f.flight_date) : ''}${f.flight_time ? ' ' + esc(f.flight_time) : ''}</div>` : `<div class="muted">لا توجد رحلة ${k}</div>`;
   const showGroup = () => { if (!$('#fgroup', m.el)) return; const g = $('#fgroup', m.el).value; if (!g) { $('#ftext', m.el).innerHTML = v && (v.arrival_date || v.departure_date) ? `<b>بيانات الرحلة الحالية:</b> وصول ${esc(v.arrival_date || '—')} ${esc(v.arrival_time || '')} ${esc([v.airline, v.flight_no].filter(Boolean).join(' '))} — مغادرة ${esc(v.departure_date || '—')} ${esc(v.departure_time || '')} ${esc([v.dep_airline, v.dep_flight_no].filter(Boolean).join(' '))}` : 'اختر رقم المجموعة لتظهر بيانات رحلتي الوصول والمغادرة. تُعدَّل بيانات الرحلات من تبويب «الرحلات».'; return; }
@@ -272,7 +280,7 @@ function dupHtml(list) {
 
 async function visitorDetail(id, writer, done) {
   const v = (await api('GET', '/visitors/' + id)).visitor;
-  const body = `<div class="fgrid"><div><b>الدولة:</b> ${esc(v.country_name)}</div><div><b>التصنيف:</b> ${CAT[v.category]}${v.is_leader ? ' (قائد الفوج)' : ''}</div><div><b>الهاتف:</b> <span class="ltr">${esc(v.phone) || '—'}</span></div>
+  const body = `<div class="fgrid"><div><b>الدولة:</b> ${esc(v.country_name)}</div><div><b>التصنيف:</b> ${CAT[v.category]}${v.is_leader ? ' (قائد الفوج)' : ''}</div><div><b>الهاتف:</b> <span class="ltr">${esc(v.phone) || '—'}</span>${v.phone2 ? ` — <span class="ltr">${esc(v.phone2)}</span>` : ''}</div>
     <div><b>${v.head_name ? 'رب الأسرة' : 'الفوج'}:</b> ${esc(v.head_name || v.group_name) || '—'}</div>
     <div><b>الوصول:</b> ${fmtDate(v.arrival_date, v.arrival_time)}</div><div><b>المغادرة:</b> ${fmtDate(v.departure_date, v.departure_time)}</div><div><b>رحلة الوصول:</b> ${esc([v.airline, v.flight_no].filter(Boolean).join(' ')) || '—'}</div><div><b>مطار الوصول:</b> ${esc(v.airport) || '—'}</div><div><b>رحلة المغادرة:</b> ${esc([v.dep_airline, v.dep_flight_no].filter(Boolean).join(' ')) || '—'}</div><div><b>مطار المغادرة:</b> ${esc(v.dep_airport) || '—'}</div>
     <div class="full"><b>ملاحظات:</b> ${esc(v.notes) || '—'}</div></div>
@@ -347,19 +355,26 @@ App.view('persons', async page => {
       <div class="field"><label>تاريخ الميلاد <span class="muted small">(بالغ: 15 سنة فأكثر، طفل: أقل من 15)</span></label><input type="date" name="birth_date" value="${esc(p?.birth_date)}"></div>
       <div class="field"><label>الدولة *</label><select name="country_id" required>${countryOpts(p?.country_id ?? (App.countries.length === 1 ? App.countries[0].id : ''), 'اختر…')}</select></div>
       <div class="field"><label>البلد</label><input name="city" value="${esc(p?.city)}"></div>
-      <div class="field"><label>التصنيف *</label><select name="category" required>${opts(Object.entries(PCAT), p?.category || 'individual')}</select></div></div></form>`;
-    modal({ title: p ? 'تعديل بيانات مريد' : 'إضافة مريد', width: 560, body, buttons: [{ label: 'حفظ', onClick: async m => {
-      const f = $('#pf', m.el); if (!f.reportValidity()) return; const b = formData(f);
+      <div class="field"><label>رقم الهاتف 1</label><input name="phone" dir="ltr" style="text-align:right" value="${esc(p?.phone)}"></div><div class="field"><label>رقم الهاتف 2</label><input name="phone2" dir="ltr" style="text-align:right" value="${esc(p?.phone2)}"></div>
+      <div class="field"><label>التصنيف *</label><select name="category" required>${opts(Object.entries(PCAT), p?.category || 'individual')}</select></div>
+      <div class="field" id="hbox" hidden><label>رب الأسرة التابع له</label><select name="head_id"><option value="">— اختر رب الأسرة —</option></select></div></div></form>`;
+    const pm = modal({ title: p ? 'تعديل بيانات مريد' : 'إضافة مريد', width: 560, body, buttons: [{ label: 'حفظ', onClick: async m => {
+      const f = $('#pf', m.el); if (!f.reportValidity()) return; const b = formData(f); if (b.category !== 'family_member') b.head_id = '';
       p ? await api('PUT', '/persons/' + p.id, b) : await api('POST', '/persons', b); m.close(); toast('تم الحفظ'); done();
     } }, { label: 'إلغاء', cls: 'sec', close: true }] });
+    const F = $('#pf', pm.el); let heads = [];
+    const fillHeads = async () => { const fm = F.category.value === 'family_member'; $('#hbox', pm.el).hidden = !fm; if (!fm) return; const cid = F.country_id.value; if (!cid) { F.head_id.innerHTML = '<option value="">— اختر الدولة أولاً —</option>'; return; }
+      heads = (await api('GET', '/persons?' + qs({ country_id: cid, category: 'family_head' }))).persons.filter(h => !p || h.id !== p.id);
+      const cur = F.head_id.value || String(p?.head_id || ''); F.head_id.innerHTML = '<option value="">— بدون ربط —</option>' + heads.map(h => `<option value="${h.id}">${esc(h.full_name)}${h.birth_date ? ' (' + DT.d(h.birth_date) + ')' : ''}</option>`).join(''); F.head_id.value = heads.some(h => String(h.id) === cur) ? cur : ''; if (!heads.length) F.head_id.options[0].textContent = '— لا يوجد رب أسرة مسجّل لهذه الدولة —'; };
+    F.category.addEventListener('change', fillHeads); F.country_id.addEventListener('change', () => { F.head_id.value = ''; fillHeads(); }); fillHeads();
   };
   page.innerHTML = `<div class="page-head"><h1>قاعدة البيانات</h1><div class="grow"></div><button class="btn" id="addp">+ إضافة مريد</button></div>
     <div class="filters card" style="padding:12px"><div><label>بحث</label><input type="search" id="p_q" value="${esc(S.q)}" placeholder="الاسم أو البلد…"></div>
     <div><label>الدولة</label><select id="p_c">${countryOpts(S.country_id, 'الكل')}</select></div><div><label>التصنيف</label><select id="p_k">${opts(Object.entries(PCAT), S.category, 'الكل')}</select></div><div><label>الفئة العمرية</label><select id="p_a">${opts([['adult', 'بالغ (15 سنة فأكثر)'], ['child', 'طفل (أقل من 15)'], ['none', 'بلا تاريخ ميلاد']], S.age, 'الكل')}</select></div></div>
     <div id="plist"></div><p class="muted small">المريدون المسجلون هنا متاحون للاختيار في أي مناسبة من تبويب «الزائرون» ← «من قاعدة البيانات».</p>`;
   let list = [];
-  const draw = () => { $('#plist').innerHTML = `<div class="table-wrap"><table><thead><tr><th>الاسم</th><th>تاريخ الميلاد</th><th>الفئة العمرية</th><th>الدولة</th><th>البلد</th><th>التصنيف</th><th></th></tr></thead><tbody>${list.map(p => `<tr><td><b>${esc(p.full_name)}</b></td><td>${p.birth_date ? fmtDate(p.birth_date) : '—'}</td><td>${ageBadge(p.birth_date)}</td><td>${esc(p.country_name)}</td><td>${esc(p.city) || '—'}</td><td>${PCAT[p.category]}</td>
-    <td class="actions"><button class="btn sm sec" data-pe="${p.id}">تعديل</button> <button class="btn sm danger" data-pd="${p.id}">حذف</button></td></tr>`).join('') || '<tr><td colspan="7" class="empty">لا يوجد مريدون</td></tr>'}</tbody></table></div>`; };
+  const draw = () => { $('#plist').innerHTML = `<div class="table-wrap"><table><thead><tr><th>الاسم</th><th>تاريخ الميلاد</th><th>الفئة العمرية</th><th>الدولة</th><th>البلد</th><th>الهاتف</th><th>التصنيف</th><th></th></tr></thead><tbody>${list.map(p => `<tr><td><b>${esc(p.full_name)}</b></td><td>${p.birth_date ? fmtDate(p.birth_date) : '—'}</td><td>${ageBadge(p.birth_date)}</td><td>${esc(p.country_name)}</td><td>${esc(p.city) || '—'}</td><td>${[p.phone, p.phone2].filter(Boolean).map(x => `<div class="ltr">${esc(x)}</div>`).join('') || '—'}</td><td>${PCAT[p.category]}${p.category === 'family_member' ? `<div class="muted small">${p.head_name ? 'تابع لـ ' + esc(p.head_name) : 'غير مربوط برب أسرة'}</div>` : ''}${p.category === 'family_head' && p.members_n ? `<div class="muted small">${p.members_n} تابع</div>` : ''}</td>
+    <td class="actions"><button class="btn sm sec" data-pe="${p.id}">تعديل</button> <button class="btn sm danger" data-pd="${p.id}">حذف</button></td></tr>`).join('') || '<tr><td colspan="8" class="empty">لا يوجد مريدون</td></tr>'}</tbody></table></div>`; };
   const load = async () => { list = (await api('GET', '/persons?' + qs({ q: S.q, country_id: S.country_id, category: S.category }))).persons.filter(p => !S.age || (S.age === 'none' ? !ageGroup(p.birth_date) : ageGroup(p.birth_date) === S.age)); draw(); };
   const rd = debounce(() => { if (!$('#p_q')) return; S.q = $('#p_q').value; S.country_id = $('#p_c').value; S.category = $('#p_k').value; S.age = $('#p_a').value; load(); }, 250);
   ['p_q', 'p_c', 'p_k', 'p_a'].forEach(i => { $('#' + i).addEventListener('input', rd); $('#' + i).addEventListener('change', rd); });
@@ -393,19 +408,28 @@ App.view('flights', async (page, ctx) => {
     } }, { label: 'إلغاء', cls: 'sec', close: true }] });
     $('#fk', m.el).onchange = e => { $('#ftl', m.el).textContent = e.target.value === 'arrival' ? 'وقت الوصول' : 'وقت المغادرة'; };
   };
-  const shown = () => flights.filter(f => (!S.q || (f.group_no + ' ' + f.flight_no + ' ' + f.airline + ' ' + f.airport).toLowerCase().includes(S.q.toLowerCase())) && (!S.country_id || String(f.country_id) === S.country_id) && (!S.kind || f.kind === S.kind));
-  const rows = () => shown().map(f => `<tr><td><b>${esc(f.group_no) || '—'}</b></td><td>${esc(f.country_name) || '—'}</td><td><span class="badge ${f.kind === 'arrival' ? 'ok' : 'info'}">${KIND[f.kind]}</span></td><td>${esc(f.airline)}</td><td><b class="ltr">${esc(f.flight_no)}</b></td><td>${esc(f.airport)}</td>
+  const open = S.open ||= new Set(); let paxData = null;
+  const loadPax = async () => { if (paxData) return paxData; const [vr, pr] = await Promise.all([api('GET', '/visitors?event_id=' + App.eventId), api('GET', '/persons?event_id=' + App.eventId).catch(() => ({ persons: [] }))]);
+    const bd = {}; pr.persons.forEach(x => { if (x.visitor_id) bd[x.visitor_id] = x.birth_date; }); return (paxData = { vs: vr.visitors, bd }); };
+  const paxHtml = f => { if (!paxData) return '<div class="muted">جارٍ التحميل…</div>'; const l = paxData.vs.filter(v => (f.kind === 'arrival' ? v.arrival_flight_id : v.departure_flight_id) === f.id);
+    return l.length ? `<table class="sub"><thead><tr><th>#</th><th>الاسم</th><th>الدولة</th><th>التصنيف</th><th>العائلة / الفوج</th><th>الهاتف</th><th>الفئة العمرية</th><th>يحتاج نقل</th></tr></thead><tbody>${l.map((v, i) => `<tr><td>${i + 1}</td><td><b>${esc(v.full_name)}</b></td><td>${esc(v.country_name)}</td><td>${CAT[v.category]}${v.is_leader ? ' (قائد)' : ''}</td><td>${esc(v.head_name ? 'عائلة ' + v.head_name : v.group_name ? 'فوج ' + v.group_name : '')}</td><td>${[v.phone, v.phone2].filter(Boolean).map(x => `<div class="ltr">${esc(x)}</div>`).join('')}</td><td>${ageBadge(paxData.bd[v.id])}</td><td>${v.needs_transport ? 'نعم' : 'لا'}</td></tr>`).join('')}</tbody></table>` : '<div class="muted">لا يوجد ركاب مسجلون في هذه الرحلة بعد. استخدم «+ ركاب» لإضافتهم.</div>'; };
+  const byTime = (a, b) => (a.flight_date || '9999').localeCompare(b.flight_date || '9999') || (a.flight_time || '99:99').localeCompare(b.flight_time || '99:99') || String(a.group_no).localeCompare(String(b.group_no), 'ar', { numeric: true }) || a.kind.localeCompare(b.kind);
+  const shown = () => flights.slice().sort(byTime).filter(f => (!S.q || (f.group_no + ' ' + f.flight_no + ' ' + f.airline + ' ' + f.airport).toLowerCase().includes(S.q.toLowerCase())) && (!S.country_id || String(f.country_id) === S.country_id) && (!S.kind || f.kind === S.kind));
+  const rows = () => shown().map(f => `<tr><td style="white-space:nowrap"><button class="btn sm ghost" data-fx="${f.id}" title="عرض الركاب" style="min-width:34px;font-weight:800">${open.has(f.id) ? '−' : '+'}</button> <b>${esc(f.group_no) || '—'}</b></td><td>${esc(f.country_name) || '—'}</td><td><span class="badge ${f.kind === 'arrival' ? 'ok' : 'info'}">${KIND[f.kind]}</span></td><td>${esc(f.airline)}</td><td><b class="ltr">${esc(f.flight_no)}</b></td><td>${esc(f.airport)}</td>
     <td>${f.flight_date ? fmtDate(f.flight_date) : '—'}</td><td>${esc(f.flight_time) || '—'}</td><td>${f.passengers}</td>
-    <td class="actions"><button class="btn sm" data-fp="${f.id}">+ ركاب</button> <button class="btn sm sec" data-fe="${f.id}">تعديل</button> <button class="btn sm danger" data-fd="${f.id}">حذف</button></td></tr>`).join('') || '<tr><td colspan="10" class="empty">لا توجد رحلات في هذه المناسبة. اضغط «رحلة جديدة».</td></tr>';
+    <td class="actions"><button class="btn sm" data-fp="${f.id}">+ ركاب</button> <button class="btn sm sec" data-fe="${f.id}">تعديل</button> <button class="btn sm danger" data-fd="${f.id}">حذف</button></td></tr>${open.has(f.id) ? `<tr class="fx"><td colspan="10" style="background:#f6f9f3">${paxHtml(f)}</td></tr>` : ''}`).join('') || '<tr><td colspan="10" class="empty">لا توجد رحلات في هذه المناسبة. اضغط «رحلة جديدة».</td></tr>';
   page.innerHTML = `<div class="page-head"><h1>الرحلات</h1><div class="grow"></div>${canEdit ? '<button class="btn" id="addf">+ رحلة جديدة</button>' : ''}</div>
     <div class="filters card" style="padding:12px"><div><label>بحث (رقم المجموعة / الرحلة / الشركة / المطار)</label><input type="search" id="fq" value="${esc(S.q)}"></div><div><label>الدولة</label><select id="fc">${countryOpts(S.country_id, 'الكل')}</select></div><div><label>النوع</label><select id="fkk">${opts(Object.entries(KIND), S.kind, 'الكل')}</select></div></div>
     <div class="table-wrap"><table><thead><tr><th>رقم المجموعة</th><th>الدولة</th><th>النوع</th><th>شركة الطيران</th><th>رقم الرحلة</th><th>المطار</th><th>التاريخ</th><th>الوقت</th><th>الركاب</th><th></th></tr></thead><tbody id="frows">${rows()}</tbody></table></div>
     <p class="muted small">لكل مناسبة مجموعة رحلاتها الخاصة. أضف لكل مجموعة رحلة وصول ورحلة مغادرة بنفس رقم المجموعة، ثم اختر رقم المجموعة في بيانات الزائر.</p>`;
+  if (open.size) loadPax().then(() => { if (!ctx.stale() && $('#frows')) $('#frows').innerHTML = rows(); }).catch(() => {});
   const redraw = () => { S.q = $('#fq').value; S.country_id = $('#fc').value; S.kind = $('#fkk').value; $('#frows').innerHTML = rows(); };
   ['fq', 'fc', 'fkk'].forEach(i => { $('#' + i).addEventListener('input', redraw); $('#' + i).addEventListener('change', redraw); });
   const after = async (id, isNew) => { await App.refresh(); if (isNew) { const f = (await api('GET', '/flights?event_id=' + App.eventId)).flights.find(x => x.id === id); if (f && await confirmBox(`تمت إضافة الرحلة ${f.flight_no} للمجموعة ${f.group_no}. هل تريد إضافة ركابها الآن من قاعدة البيانات؟`, { okText: 'إضافة ركاب' })) addPassengers(f); } };
   if ($('#addf')) $('#addf').onclick = () => form(null, after);
-  page.onclick = async e => { const b = e.target.closest('button'); if (!b) return; const id = +(b.dataset.fp || b.dataset.fe || b.dataset.fd); const f = flights.find(x => x.id === id); if (!f) return;
+  page.onclick = async e => { const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.fx) { const id = +b.dataset.fx; if (open.has(id)) open.delete(id); else { open.add(id); if (!paxData) { $('#frows').innerHTML = rows(); try { await loadPax(); } catch (er) { toast(er.message, 'err'); } } } $('#frows').innerHTML = rows(); return; }
+    const id = +(b.dataset.fp || b.dataset.fe || b.dataset.fd); const f = flights.find(x => x.id === id); if (!f) return;
     if (b.dataset.fp) addPassengers(f); if (b.dataset.fe) form(f, () => App.refresh());
     if (b.dataset.fd && await confirmBox(`حذف رحلة ${KIND[f.kind]} المجموعة ${f.group_no} (${f.flight_no})؟ تبقى بيانات موعد الركاب كما هي ويُفك ارتباطهم بها.`, { danger: true, okText: 'حذف' })) { await api('DELETE', '/flights/' + f.id); toast('تم الحذف'); App.refresh(); } };
 });

@@ -10,16 +10,19 @@ const Pdf = (() => {
     if (r.flight === 'إجمالي اليوم') return 'font-weight:700;background:#f1f6df;';
     return i % 2 ? 'background:#f6f8f4;' : '';
   }
-  const td = 'border:1px solid #c9d3c4;padding:5px 7px;text-align:right;vertical-align:top;word-break:break-word;';
-  const th = 'border:1px solid #14502a;padding:6px 7px;text-align:right;background:#1d5a34;color:#fff;font-weight:700;';
+  const td = 'border:1px solid #c9d3c4;padding:6px 7px;text-align:center;vertical-align:middle;font-weight:700;';
+  const th = 'border:1px solid #14502a;padding:7px 7px;text-align:center;background:#1d5a34;color:#fff;font-weight:800;';
+  const HARD = /الاسم|المقيم|الزائر/;
+  const nwOf = (c, soft) => soft ? !!c.nowrap : HARD.test(c.label || '');
+  const cellSt = (c, base, soft = true) => base + (nwOf(c, soft) ? 'white-space:nowrap;' : 'word-break:break-word;');
 
   function titleHtml(d, first) {
     return first
-      ? `<div style="text-align:center;margin-bottom:10px"><div style="font-size:22px;font-weight:800;color:#14502a">جاؤوك — ${esc(d.title)}</div><div style="font-size:14px;margin-top:3px">${esc(d.event)}${d.subtitle ? ' — ' + esc(d.subtitle) : ''}</div><div style="font-size:11px;color:#666;margin-top:2px">أُعدّ بواسطة ${esc(d.generated_by)} — ${esc(new Date(d.generated_at || Date.now()).toLocaleString('ar-EG'))} — ${d.groups ? d.groups.length + ' مجموعة' : d.rows.length + ' سطر'}</div></div>`
+      ? `<div style="text-align:center;margin-bottom:10px"><div style="font-size:22px;font-weight:800;color:#14502a">جاؤوك — ${esc(d.title)}</div><div style="font-size:14px;margin-top:3px">${esc(d.event)}${d.subtitle ? ' — ' + esc(d.subtitle) : ''}</div><div style="font-size:11px;color:#666;margin-top:2px">أُعدّ بواسطة ${esc(d.generated_by)} — ${esc(DT.stamp(d.generated_at || Date.now()))} — ${d.groups ? d.groups.length + ' مجموعة' : d.rows.length + ' سطر'}</div></div>`
       : `<div style="font-size:12px;color:#14502a;font-weight:700;margin-bottom:6px">جاؤوك — ${esc(d.title)} (تابع)</div>`;
   }
-  const tableHtml = (d, rows, widths) => `<table style="border-collapse:collapse;table-layout:fixed;width:${widths.reduce((a, b) => a + b, 0)}px;font-size:12.5px"><colgroup>${widths.map(w => `<col style="width:${w}px"/>`).join('')}</colgroup>
-    <thead><tr>${d.columns.map(c => `<th style="${th}">${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${rows.map(({ r, i }) => `<tr style="${rowStyle(r, i)}">${d.columns.map(c => `<td style="${td}">${esc(r[c.key] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  const tableHtml = (d, rows, widths, fs, soft = true) => `<table style="border-collapse:collapse;table-layout:fixed;width:${widths.reduce((a, b) => a + b, 0)}px;font-size:${fs}px"><colgroup>${widths.map(w => `<col style="width:${w}px"/>`).join('')}</colgroup>
+    <thead><tr>${d.columns.map(c => `<th style="${th}">${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${rows.map(({ r, i }) => `<tr style="${rowStyle(r, i)}">${d.columns.map(c => `<td style="${cellSt(c, td, soft)}">${esc(r[c.key] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   const wrap = (W, H, inner) => `<div xmlns="http://www.w3.org/1999/xhtml" dir="rtl" style="${FONT}width:${W}px;height:${H}px;box-sizing:border-box;padding:${PAD}px;background:#fff;color:#111;position:relative;overflow:hidden">${inner}</div>`;
 
   async function toJpeg(html, W, H, S) {
@@ -55,9 +58,9 @@ const Pdf = (() => {
   /* تقرير المجموعات: وحدات HTML (رأس المجموعة ثم أزواج الأسماء بعمودين) تُستعمل في الشاشة وفي PDF */
   const gHead = g => {
     const info = (t, f) => f ? `<div style="margin-top:3px"><b>${t}:</b> ${esc([f.flight_date, f.airport && 'المطار: ' + f.airport, f.airline && 'شركة الطيران: ' + f.airline, f.flight_no && 'رقم الرحلة: ' + f.flight_no, f.flight_time && (t === 'رحلة الوصول' ? 'وقت الوصول: ' : 'وقت المغادرة: ') + f.flight_time].filter(Boolean).join('  |  '))}</div>` : '';
-    return `<div style="margin-top:14px;padding:8px 10px;border:1px solid #1d5a34;border-radius:6px;background:#eef5ea;font-size:13px"><div style="font-size:16px;font-weight:800;color:#14502a">${g.unlinked ? 'زوار غير مرتبطين برقم مجموعة' : `المجموعة رقم (${esc(g.group_no)})${g.country ? ' - ' + esc(g.country) : ''}`}</div>${info('رحلة الوصول', g.arrival)}${info('رحلة المغادرة', g.departure)}<div style="margin-top:4px;font-weight:700">المجموع: ${g.total} (${g.adults} بالغين - ${g.children} أطفال)</div></div>`;
+    return `<div style="margin-top:14px;padding:8px 10px;border:1px solid #1d5a34;border-radius:6px;background:#eef5ea;font-size:14px;font-weight:700"><div style="font-size:18px;font-weight:800;color:#14502a">${g.unlinked ? 'زوار غير مرتبطين برقم مجموعة' : `المجموعة رقم (${esc(g.group_no)})${g.country ? ' - ' + esc(g.country) : ''}`}</div>${info('رحلة الوصول', g.arrival)}${info('رحلة المغادرة', g.departure)}<div style="margin-top:4px;font-weight:700">المجموع: ${g.total} (${g.adults} بالغين - ${g.children} أطفال)</div></div>`;
   };
-  const gCell = (n, p) => p ? `<td style="width:50%;padding:3px 6px;border-bottom:1px solid #e3e8df;vertical-align:top;font-size:13px"><span style="color:#777">${n}.</span> ${esc(p.name)}${p.child ? ' <span style="color:#a65b00;font-size:11px">(طفل)</span>' : ''}${p.rel ? ` <span style="color:#555;font-size:11.5px">(${esc(p.rel)})</span>` : ''}</td>` : '<td style="width:50%"></td>';
+  const gCell = (n, p) => p ? `<td style="width:50%;padding:4px 6px;border-bottom:1px solid #e3e8df;vertical-align:middle;text-align:center;font-weight:700;font-size:15px"><span style="color:#777">${n}.</span> <span style="white-space:nowrap">${esc(p.name)}</span>${p.child ? ' <span style="color:#a65b00;font-size:11px">(طفل)</span>' : ''}${p.rel ? ` <span style="color:#555;font-size:11.5px">(${esc(p.rel)})</span>` : ''}</td>` : '<td style="width:50%"></td>';
   const gRow = (g, i) => `<table style="border-collapse:collapse;width:100%;table-layout:fixed"><tr>${gCell(2 * i + 1, g.people[2 * i])}${gCell(2 * i + 2, g.people[2 * i + 1])}</tr></table>`;
   function groupUnits(d) {
     const u = []; for (const g of d.groups) { u.push({ html: gHead(g), keep: 2 }); for (let i = 0; i < Math.ceil(g.people.length / 2); i++) u.push({ html: gRow(g, i) }); } return u;
@@ -80,27 +83,31 @@ const Pdf = (() => {
   /** d: بيانات التقرير {title,event,subtitle,generated_by,generated_at,columns:[{key,label}],rows:[{}]} */
   async function report(d, onProgress) {
     if (d.groups) return groupsReport(d, onProgress);
-    const landscape = d.columns.length > 6;
-    const W = landscape ? 1123 : 794, H = landscape ? 794 : 1123, S = 1.6;
     const items = d.rows.map((r, i) => ({ r, i }));
-    // قياس الأعمدة والصفوف على جدول كامل خارج الشاشة
-    const stage = document.createElement('div'); stage.style.cssText = `position:fixed;left:-30000px;top:0;width:${W}px;`;
-    stage.innerHTML = `<div dir="rtl" style="${FONT}width:${W}px;padding:${PAD}px;box-sizing:border-box">${titleHtml(d, true)}<div id="m">${items.length ? '' : ''}</div></div>`;
-    document.body.appendChild(stage);
-    let widths, titleH, headH, rowH;
-    try {
-      const inner = stage.firstChild; titleH = inner.firstChild.offsetHeight + 10;
-      const m = inner.querySelector('#m'); m.innerHTML = `<table style="border-collapse:collapse;font-size:12.5px;width:${W - 2 * PAD}px"><thead><tr>${d.columns.map(c => `<th style="${th}">${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${items.map(({ r, i }) => `<tr style="${rowStyle(r, i)}">${d.columns.map(c => `<td style="${td}">${esc(r[c.key] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-      const t = m.firstChild; const ths = [...t.tHead.rows[0].cells]; widths = ths.map(x => x.getBoundingClientRect().width); headH = t.tHead.offsetHeight; rowH = [...t.tBodies[0].rows].map(x => x.getBoundingClientRect().height);
-      const sum = widths.reduce((a, b) => a + b, 0), target = W - 2 * PAD; widths = widths.map(w => Math.floor(w * target / sum));
-    } finally { stage.remove(); }
+    // قياس الأعمدة والصفوف على جدول كامل خارج الشاشة: نجرّب عمودياً بخط 15 ثم أفقياً، ثم نصغّر الخط إن لزم كي يبقى الاسم في سطر واحد
+    const measure = (W, fs, soft) => {
+      const stage = document.createElement('div'); stage.style.cssText = `position:fixed;left:-30000px;top:0;width:${W}px;`;
+      stage.innerHTML = `<div dir="rtl" style="${FONT}width:${W}px;padding:${PAD}px;box-sizing:border-box">${titleHtml(d, true)}<div id="m"></div></div>`; document.body.appendChild(stage);
+      try {
+        const inner = stage.firstChild; const titleH = inner.firstChild.offsetHeight + 10; const target = W - 2 * PAD;
+        const m = inner.querySelector('#m'); m.innerHTML = `<table style="border-collapse:collapse;font-size:${fs}px;width:${target}px"><thead><tr>${d.columns.map(c => `<th style="${th}${nwOf(c, soft) ? 'white-space:nowrap;' : ''}">${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${items.map(({ r, i }) => `<tr style="${rowStyle(r, i)}">${d.columns.map(c => `<td style="${cellSt(c, td, soft)}">${esc(r[c.key] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+        const t = m.firstChild; const natural = t.getBoundingClientRect().width; const ths = [...t.tHead.rows[0].cells]; const raw = ths.map(x => x.getBoundingClientRect().width); const sum = raw.reduce((a, b) => a + b, 0);
+        return { titleH, headH: t.tHead.offsetHeight, rowH: [...t.tBodies[0].rows].map(x => x.getBoundingClientRect().height), widths: raw.map(w => Math.floor(w * target / sum)), over: natural > target + 2, natural, target };
+      } finally { stage.remove(); }
+    };
+    let W = 794, H = 1123, fs = 15, soft = true, S = 1.6, me = measure(W, fs, soft);
+    if (me.over) { W = 1123; H = 794; me = measure(W, fs, soft); }
+    if (me.over) { fs = 12; me = measure(W, fs, soft); }
+    if (me.over) { soft = false; fs = 15; me = measure(W, fs, soft); }   // يبقى الاسم وحده في سطر واحد وتلتفّ بقية الخانات
+    for (let k = 0; k < 4 && me.over && fs > 9; k++) { fs = Math.max(9, Math.floor(fs * me.target / me.natural * 10) / 10 - 0.2); me = measure(W, fs, soft); }
+    const landscape = W > H; const { widths, titleH, headH, rowH } = me;
     // توزيع الصفوف على الصفحات
     const avail = H - 2 * PAD - FOOT; const pages = []; let cur = [], used = titleH + headH + 4;
     items.forEach((it, k) => { const h = rowH[k] + 2; if (cur.length && used + h > avail) { pages.push(cur); cur = []; used = 26 + headH + 4; } cur.push(it); used += h; });
     pages.push(cur);
     const out = [];
     for (let p = 0; p < pages.length; p++) {
-      const body = titleHtml(d, p === 0) + (pages[p].length ? tableHtml(d, pages[p], widths) : `<div style="text-align:center;padding:40px;color:#666">لا توجد بيانات لهذا التقرير</div>`) +
+      const body = titleHtml(d, p === 0) + (pages[p].length ? tableHtml(d, pages[p], widths, fs, soft) : `<div style="text-align:center;padding:40px;color:#666">لا توجد بيانات لهذا التقرير</div>`) +
         `<div style="position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:11px;color:#777">صفحة ${p + 1} من ${pages.length}</div>`;
       out.push(await toJpeg(wrap(W, H, body), W, H, S)); if (onProgress) onProgress(p + 1, pages.length);
     }

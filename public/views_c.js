@@ -98,7 +98,7 @@ App.view('countries', async (page, ctx) => {
 /* ================= التقارير ================= */
 App.view('reports', async (page, ctx) => {
   const { reports } = await api('GET', '/report-list'); if (ctx.stale()) return;
-  const R = (App._rp ||= { type: null, country_id: '', date: '', from: '', to: '', building_id: '' }); if (!reports.find(r => r.key === R.type)) R.type = reports[0]?.key;
+  const R = (App._rp ||= { type: null, country_id: '', date: '', from: '', to: '', building_id: '' }); R.hide ||= []; R.sdir ||= 'asc'; if (!reports.find(r => r.key === R.type)) R.type = reports[0]?.key;
   const needDate = ['rooms_status'], needRange = ['arrivals_departures', 'arrivals_counts', 'drivers_tasks'], needBld = ['housing'], needCountry = ['visitors_all', 'families_groups', 'arrivals_departures', 'arrivals_counts', 'passenger_list', 'group_visit'], needPax = ['passenger_list'];
   const structure = can('admin', 'event_manager', 'building_supervisor') ? (await api('GET', '/structure')).buildings : [];
   const cs = App.user.role === 'country_supervisor';
@@ -110,19 +110,36 @@ App.view('reports', async (page, ctx) => {
     <div id="rf"><label>الرحلة</label><input id="rflight" list="dl_rf" placeholder="رقم الرحلة" dir="ltr" style="text-align:right" value="${esc(R.flight || '')}"></div><div id="rdy"><label>اليوم</label><input type="date" id="rday" value="${R.day || ''}"></div>
     <div id="ra"><label>المطار</label><input id="rairport" list="dl_ra" placeholder="اسم المطار" value="${esc(R.airport || '')}"></div><datalist id="dl_rf"></datalist><datalist id="dl_ra"></datalist>
     <div id="rb"><label>المبنى</label><select id="rbld">${opts(structure.map(b => [b.id, b.name]), R.building_id, 'الكل')}</select></div>
-    <div class="row"><button class="btn" id="run">عرض</button></div></div></div><div id="out"></div>`;
+    <div class="row"><button class="btn" id="run">عرض</button></div></div></div><div class="card no-print" id="rxbox" style="margin-bottom:14px" hidden></div><div id="out"></div>`;
   const sync = () => { R.type = $('#rt').value; $('#rc').hidden = !needCountry.includes(R.type) || cs && App.countries.length < 2; $('#rd').hidden = !needDate.includes(R.type); for (const i of ['rr', 'rr2', 'rr3', 'rr4']) $('#' + i).hidden = !needRange.includes(R.type); $('#rb').hidden = !needBld.includes(R.type); for (const i of ['rk', 'rf', 'rdy', 'ra']) $('#' + i).hidden = !needPax.includes(R.type); }; sync();
   $('#rkind').value = R.kind || '';
   api('GET', '/flights?event_id=' + App.eventId).then(r => { $('#dl_rf').innerHTML = [...new Set(r.flights.map(f => f.flight_no))].map(x => `<option value="${esc(x)}">`).join(''); $('#dl_ra').innerHTML = [...new Set(r.flights.map(f => f.airport).filter(Boolean))].map(x => `<option value="${esc(x)}">`).join(''); }).catch(() => {});
-  $('#rt').onchange = () => { sync(); run(); };
-  const params = () => ({ event_id: App.eventId, country_id: $('#rc').hidden ? '' : $('#rcountry').value, date: $('#rd').hidden ? '' : $('#rdate').value, date_from: $('#rr').hidden ? '' : $('#rfrom').value, date_to: $('#rr').hidden ? '' : $('#rto').value, building_id: $('#rb').hidden ? '' : $('#rbld').value, kind: $('#rk').hidden ? '' : $('#rkind').value, flight: $('#rf').hidden ? '' : $('#rflight').value.trim(), day: $('#rdy').hidden ? '' : $('#rday').value, airport: $('#ra').hidden ? '' : $('#rairport').value.trim() });
+  $('#rt').onchange = () => { Object.assign(R, { fcol: '', fval: '', search: '', sort: '', sdir: 'asc', hide: [] }); $('#rxbox').dataset.t = ''; sync(); run(); };
+  const params = () => ({ event_id: App.eventId, country_id: $('#rc').hidden ? '' : $('#rcountry').value, date: $('#rd').hidden ? '' : $('#rdate').value, date_from: $('#rr').hidden ? '' : $('#rfrom').value, date_to: $('#rr').hidden ? '' : $('#rto').value, building_id: $('#rb').hidden ? '' : $('#rbld').value, kind: $('#rk').hidden ? '' : $('#rkind').value, flight: $('#rf').hidden ? '' : $('#rflight').value.trim(), day: $('#rdy').hidden ? '' : $('#rday').value, airport: $('#ra').hidden ? '' : $('#rairport').value.trim(), fcol: R.fcol || '', fval: R.fval || '', search: R.search || '', sort: R.sort || '', sdir: R.sdir || 'asc', hide: (R.hide || []).join(',') });
+  // مربعات التصفية والترتيب وأعمدة الطباعة: تنعكس على الشاشة وعلى PDF وExcel
+  const drawX = meta => { const bx = $('#rxbox'); if (!meta) { bx.hidden = true; bx.dataset.t = R.type; return; } bx.hidden = false; bx.dataset.t = R.type;
+    const fcols = meta.columns.filter(c => meta.values[c.key]);
+    bx.innerHTML = `<div class="filters" style="margin:0"><div><label>بحث في التقرير</label><input type="search" id="xsearch" value="${esc(R.search || '')}" placeholder="كلمة داخل أي خانة"></div>
+      <div><label>تصفية حسب</label><select id="xfcol">${opts(fcols.map(c => [c.key, c.label]), R.fcol, 'بدون تصفية')}</select></div>
+      <div><label>القيمة</label><select id="xfval"></select></div>
+      <div><label>ترتيب حسب</label><select id="xsort">${opts(meta.sorts.map(c => [c.key, c.label]), R.sort, 'الترتيب الافتراضي')}</select></div>
+      <div><label>الاتجاه</label><select id="xsdir"><option value="asc">تصاعدي (أ←ي / الأصغر)</option><option value="desc">تنازلي (ي←أ / الأكبر)</option></select></div></div>
+      <details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700">الأعمدة التي ستظهر في الطباعة (PDF / Excel)</summary><div class="row" style="flex-wrap:wrap;gap:6px 18px;margin-top:6px">${meta.columns.map(c => `<label class="check" style="font-weight:600"><input type="checkbox" data-col="${c.key}" ${R.hide.includes(c.key) ? '' : 'checked'}> ${esc(c.label)}</label>`).join('')}</div></details>`;
+    const fillV = () => { const k = $('#xfcol').value; $('#xfval').innerHTML = k ? opts((meta.values[k] || []).map(v => [v, v]), R.fval, 'اختر القيمة…') : '<option value="">—</option>'; $('#xfval').disabled = !k; };
+    $('#xsdir').value = R.sdir || 'asc'; fillV();
+    $('#xsearch').oninput = debounce(() => { R.search = $('#xsearch').value; run(); }, 350);
+    $('#xfcol').onchange = () => { R.fcol = $('#xfcol').value; R.fval = ''; fillV(); run(); };
+    $('#xfval').onchange = () => { R.fval = $('#xfval').value; run(); };
+    $('#xsort').onchange = () => { R.sort = $('#xsort').value; run(); }; $('#xsdir').onchange = () => { R.sdir = $('#xsdir').value; run(); };
+    bx.querySelectorAll('input[data-col]').forEach(i => (i.onchange = () => { R.hide = [...bx.querySelectorAll('input[data-col]')].filter(x => !x.checked).map(x => x.dataset.col); run(); }));
+  };
   async function run() {
     R.country_id = $('#rcountry').value; R.date = $('#rdate').value; R.from = $('#rfrom').value; R.to = $('#rto').value; R.building_id = $('#rbld').value; R.kind = $('#rkind').value; R.flight = $('#rflight').value; R.day = $('#rday').value; R.airport = $('#rairport').value; const p = params();
-    const d = await api('GET', `/reports/${R.type}?` + qs(p)); if (ctx.stale()) return;
+    const d = await api('GET', `/reports/${R.type}?` + qs(p)); if (ctx.stale()) return; if ($('#rxbox').dataset.t !== R.type) drawX(d.meta);
     $('#out').innerHTML = `<div class="card" id="sheet"><div class="row no-print" style="margin-bottom:10px"><h2 style="margin:0">${esc(d.title)}</h2><span class="badge">${d.groups ? d.groups.length + ' مجموعة' : d.rows.length + ' سطر'}</span><div class="grow"></div><button class="btn" id="pdf">PDF — فتح ومشاركة</button><button class="btn sec" id="xl">تصدير Excel</button></div>
-      <div class="print-only tc" style="margin-bottom:10px"><h2>جاؤوك — ${esc(d.title)}</h2><div>${esc(d.event)} ${d.subtitle ? '— ' + esc(d.subtitle) : ''}</div><div class="small">أُعدّ بواسطة ${esc(d.generated_by)} — ${new Date(d.generated_at).toLocaleString('ar-EG')}</div></div>
-      ${d.subtitle ? `<div class="muted" style="margin-bottom:8px">${esc(d.subtitle)}</div>` : ''}${d.groups ? `<div id="gv">${d.groups.length ? Pdf.groupUnits(d).map(x => x.html).join('') : '<div class="empty">لا توجد مجموعات رحلات لهذا التقرير</div>'}</div>` : `<div class="table-wrap"><table><thead><tr>${d.columns.map(c => `<th>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>
-      ${d.rows.map(r => `<tr${r.country === 'الإجمالي' || r.date === 'الإجمالي' ? ' style="font-weight:700;background:#fdf1b8"' : r.flight === 'إجمالي اليوم' ? ' style="font-weight:700;background:#f1f6df"' : ''}>${d.columns.map(c => `<td>${esc(r[c.key] ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${d.columns.length}" class="empty">لا توجد بيانات لهذا التقرير</td></tr>`}</tbody></table></div>`}</div>`;
+      <div class="print-only tc" style="margin-bottom:10px"><h2>جاؤوك — ${esc(d.title)}</h2><div>${esc(d.event)} ${d.subtitle ? '— ' + esc(d.subtitle) : ''}</div><div class="small">أُعدّ بواسطة ${esc(d.generated_by)} — ${DT.stamp(d.generated_at)}</div></div>
+      ${d.subtitle ? `<div class="muted" style="margin-bottom:8px">${esc(d.subtitle)}</div>` : ''}${d.groups ? `<div id="gv">${d.groups.length ? Pdf.groupUnits(d).map(x => x.html).join('') : '<div class="empty">لا توجد مجموعات رحلات لهذا التقرير</div>'}</div>` : `<div class="table-wrap"><table class="rep"><thead><tr>${d.columns.map(c => `<th>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>
+      ${d.rows.map(r => `<tr${r.country === 'الإجمالي' || r.date === 'الإجمالي' ? ' style="font-weight:700;background:#fdf1b8"' : r.flight === 'إجمالي اليوم' ? ' style="font-weight:700;background:#f1f6df"' : ''}>${d.columns.map(c => `<td${c.nowrap ? ' class="nw"' : ''}>${esc(r[c.key] ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${d.columns.length}" class="empty">لا توجد بيانات لهذا التقرير</td></tr>`}</tbody></table></div>`}</div>`;
     $('#pdf').onclick = () => sharePdf(d, `gaouk-${R.type}-${todayStr()}.pdf`); $('#xl').onclick = () => download(`/reports/${R.type}?` + qs({ ...p, format: 'xlsx' }), `gaouk-${R.type}-${todayStr()}.xlsx`);
   }
   $('#rall').onclick = () => { $('#rfrom').value = ''; $('#rto').value = ''; run(); };
@@ -145,7 +162,7 @@ App.view('audit', async (page, ctx) => {
   const load = async () => {
     const { rows } = await api('GET', '/audit?' + qs({ ...f, limit: 500 })); if (ctx.stale()) return;
     $('#alist').innerHTML = `<div class="muted small" style="margin-bottom:6px">${rows.length} عملية (الأحدث أولاً)</div><div class="table-wrap"><table><thead><tr><th>التاريخ والوقت</th><th>المستخدم</th><th>العملية</th><th>العنصر</th><th>الدولة</th><th>التفاصيل</th></tr></thead><tbody>
-      ${rows.map(r => `<tr><td><span class="ltr">${esc(new Date(r.at.replace(' ', 'T') + 'Z').toLocaleString('en-GB', { hour12: false }).replace(',', ''))}</span></td><td><b>${esc(r.username) || '—'}</b></td><td><span class="badge ${r.action === 'delete' || r.action === 'login_failed' ? 'bad' : r.action === 'create' ? 'ok' : ''}">${esc(ACTION_AR[r.action] || r.action)}</span></td><td>${esc(ENTITY_AR[r.entity] || r.entity)}${r.entity_id ? ` <span class="muted small">#${r.entity_id}</span>` : ''}</td><td>${esc(r.country_name) || ''}</td><td class="small">${detailsHtml(r.details)}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">لا توجد عمليات</td></tr>'}</tbody></table></div>`;
+      ${rows.map(r => `<tr><td><span class="ltr">${esc(DT.stamp(new Date(r.at.replace(' ', 'T') + 'Z')))}</span></td><td><b>${esc(r.username) || '—'}</b></td><td><span class="badge ${r.action === 'delete' || r.action === 'login_failed' ? 'bad' : r.action === 'create' ? 'ok' : ''}">${esc(ACTION_AR[r.action] || r.action)}</span></td><td>${esc(ENTITY_AR[r.entity] || r.entity)}${r.entity_id ? ` <span class="muted small">#${r.entity_id}</span>` : ''}</td><td>${esc(r.country_name) || ''}</td><td class="small">${detailsHtml(r.details)}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">لا توجد عمليات</td></tr>'}</tbody></table></div>`;
   };
   $$('[id^=a_]', page).forEach(el => (el.onchange = () => { f[el.id.slice(2)] = el.value; load(); })); await load();
 });
