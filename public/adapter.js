@@ -20,8 +20,9 @@ const Adapter = (() => {
   function parseDateCell(v) {
     if (v === '' || v == null) return '';
     if (typeof v === 'number') { if (v > 20000 && v < 80000) return new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 864e5).toISOString().slice(0, 10); return null; }
-    const s = String(v).trim().replace(/[٠-٩]/g, c => '٠١٢٣٤٥٦٧٨٩'.indexOf(c));
+    const s = DT.toLat(String(v).trim());
     if (Compute.isDate(s)) return s;
+    const y = /^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})$/.exec(s); if (y) { const d = `${y[1]}-${y[2].padStart(2, '0')}-${y[3].padStart(2, '0')}`; if (Compute.isDate(d)) return d; }
     const m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/.exec(s);
     if (m) { const d = `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; if (Compute.isDate(d)) return d; }
     return null;
@@ -29,8 +30,9 @@ const Adapter = (() => {
   function parseTimeCell(v) {
     if (v === '' || v == null) return '';
     if (typeof v === 'number') { if (v >= 0 && v < 1) { const mins = Math.round(v * 1440); return `${String(Math.floor(mins / 60) % 24).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`; } return null; }
-    const m = /^(\d{1,2}):(\d{2})/.exec(DT.toLat(String(v).trim())); if (!m) return null;
-    const s = `${m[1].padStart(2, '0')}:${m[2]}`; return /^([01]\d|2[0-3]):[0-5]\d$/.test(s) ? s : null;
+    const raw = DT.toLat(String(v).trim()); const m = /^(\d{1,2}):(\d{2})/.exec(raw); if (!m) return null; let h = +m[1];
+    if (/م|pm/i.test(raw) && h < 12) h += 12; else if (/ص|am/i.test(raw) && h === 12) h = 0;
+    const s = `${String(h).padStart(2, '0')}:${m[2]}`; return /^([01]\d|2[0-3]):[0-5]\d$/.test(s) ? s : null;
   }
   async function parseUpload(buf) {
     const u8 = new Uint8Array(buf); let table;

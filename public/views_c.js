@@ -118,20 +118,23 @@ App.view('reports', async (page, ctx) => {
   const params = () => ({ event_id: App.eventId, country_id: $('#rc').hidden ? '' : $('#rcountry').value, date: $('#rd').hidden ? '' : $('#rdate').value, date_from: $('#rr').hidden ? '' : $('#rfrom').value, date_to: $('#rr').hidden ? '' : $('#rto').value, building_id: $('#rb').hidden ? '' : $('#rbld').value, kind: $('#rk').hidden ? '' : $('#rkind').value, flight: $('#rf').hidden ? '' : $('#rflight').value.trim(), day: $('#rdy').hidden ? '' : $('#rday').value, airport: $('#ra').hidden ? '' : $('#rairport').value.trim(), fcol: R.fcol || '', fval: R.fval || '', search: R.search || '', sort: R.sort || '', sdir: R.sdir || 'asc', hide: (R.hide || []).join(',') });
   // مربعات التصفية والترتيب وأعمدة الطباعة: تنعكس على الشاشة وعلى PDF وExcel
   const drawX = meta => { const bx = $('#rxbox'); if (!meta) { bx.hidden = true; bx.dataset.t = R.type; return; } bx.hidden = false; bx.dataset.t = R.type;
-    const fcols = meta.columns.filter(c => meta.values[c.key]);
+    const cnt = () => meta.columns.length - R.hide.filter(k => meta.columns.some(c => c.key === k)).length;
     bx.innerHTML = `<div class="filters" style="margin:0"><div><label>بحث في التقرير</label><input type="search" id="xsearch" value="${esc(R.search || '')}" placeholder="كلمة داخل أي خانة"></div>
-      <div><label>تصفية حسب</label><select id="xfcol">${opts(fcols.map(c => [c.key, c.label]), R.fcol, 'بدون تصفية')}</select></div>
-      <div><label>القيمة</label><select id="xfval"></select></div>
+      <div><label>البيانات</label><div class="dd" id="xdd"><button type="button" class="dd-btn" id="xddb"></button><div class="dd-panel" id="xddp" hidden>
+        <label class="check dd-all"><input type="checkbox" id="xall"> تحديد الكل</label>${meta.columns.map(c => `<label class="check"><input type="checkbox" data-col="${c.key}" ${R.hide.includes(c.key) ? '' : 'checked'}> ${esc(c.label)}</label>`).join('')}</div></div></div>
       <div><label>ترتيب حسب</label><select id="xsort">${opts(meta.sorts.map(c => [c.key, c.label]), R.sort, 'الترتيب الافتراضي')}</select></div>
-      <div><label>الاتجاه</label><select id="xsdir"><option value="asc">تصاعدي (أ←ي / الأصغر)</option><option value="desc">تنازلي (ي←أ / الأكبر)</option></select></div></div>
-      <details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700">الأعمدة التي ستظهر في الطباعة (PDF / Excel)</summary><div class="row" style="flex-wrap:wrap;gap:6px 18px;margin-top:6px">${meta.columns.map(c => `<label class="check" style="font-weight:600"><input type="checkbox" data-col="${c.key}" ${R.hide.includes(c.key) ? '' : 'checked'}> ${esc(c.label)}</label>`).join('')}</div></details>`;
-    const fillV = () => { const k = $('#xfcol').value; $('#xfval').innerHTML = k ? opts((meta.values[k] || []).map(v => [v, v]), R.fval, 'اختر القيمة…') : '<option value="">—</option>'; $('#xfval').disabled = !k; };
-    $('#xsdir').value = R.sdir || 'asc'; fillV();
+      <div><label>الاتجاه</label><select id="xsdir"><option value="asc">تصاعدي (أ←ي / الأصغر)</option><option value="desc">تنازلي (ي←أ / الأكبر)</option></select></div></div>`;
+    const boxes = () => [...bx.querySelectorAll('input[data-col]')];
+    const label = () => { const n = boxes().filter(x => x.checked).length; $('#xddb').textContent = n === boxes().length ? `كل البيانات (${n})` : `${n} من ${boxes().length} محددة`; $('#xall').checked = n === boxes().length; $('#xall').indeterminate = n > 0 && n < boxes().length; }; label();
+    $('#xsdir').value = R.sdir || 'asc';
+    $('#xddb').onclick = e => { e.stopPropagation(); $('#xddp').hidden = !$('#xddp').hidden; };
+    $('#xddp').onclick = e => e.stopPropagation();
+    if (!App._ddClose) { App._ddClose = true; document.addEventListener('click', () => { const p = document.getElementById('xddp'); if (p) p.hidden = true; }); }
+    const apply = () => { R.hide = boxes().filter(x => !x.checked).map(x => x.dataset.col); label(); run(); };
+    boxes().forEach(i => (i.onchange = apply));
+    $('#xall').onchange = () => { boxes().forEach(x => (x.checked = $('#xall').checked)); apply(); };
     $('#xsearch').oninput = debounce(() => { R.search = $('#xsearch').value; run(); }, 350);
-    $('#xfcol').onchange = () => { R.fcol = $('#xfcol').value; R.fval = ''; fillV(); run(); };
-    $('#xfval').onchange = () => { R.fval = $('#xfval').value; run(); };
     $('#xsort').onchange = () => { R.sort = $('#xsort').value; run(); }; $('#xsdir').onchange = () => { R.sdir = $('#xsdir').value; run(); };
-    bx.querySelectorAll('input[data-col]').forEach(i => (i.onchange = () => { R.hide = [...bx.querySelectorAll('input[data-col]')].filter(x => !x.checked).map(x => x.dataset.col); run(); }));
   };
   async function run() {
     R.country_id = $('#rcountry').value; R.date = $('#rdate').value; R.from = $('#rfrom').value; R.to = $('#rto').value; R.building_id = $('#rbld').value; R.kind = $('#rkind').value; R.flight = $('#rflight').value; R.day = $('#rday').value; R.airport = $('#rairport').value; const p = params();
