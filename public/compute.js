@@ -111,6 +111,15 @@ const Compute = (() => {
   // أعمار الزائرين: تُؤخذ من قاعدة البيانات (persons) بمطابقة الاسم والدولة؛ بالغ = 15 سنة فأكثر، طفل = أقل من 15، ومن لا تاريخ ميلاد له يُحسب بالغاً
   const ageYears = d => { if (!d || !/^\d{4}-\d\d-\d\d$/.test(d)) return null; const b = new Date(d + 'T00:00:00'), n = new Date(); let a = n.getFullYear() - b.getFullYear(); if (n.getMonth() < b.getMonth() || (n.getMonth() === b.getMonth() && n.getDate() < b.getDate())) a--; return a < 0 ? null : a; };
   async function bdMap(rpc, q) { try { const m = {}; for (const p of (await rpc('GET', '/persons', { event_id: q.event_id, country_id: q.country_id || '' })).persons) if (p.visitor_id && p.birth_date) m[p.visitor_id] = p.birth_date; return m; } catch (_) { return {}; } }
+  // ترتيب الأشخاص: الأفراد أولاً (الأكبر عمراً فالأصغر)، ثم أرباب الأسر (الأكبر عمراً)، وتحت كل رب أسرة تابعوه (الأكبر عمراً). من لا تاريخ ميلاد له يأتي آخراً
+  function orderPeople(list, birthOf) {
+    const age = v => { const a = ageYears(birthOf(v)); return a === null ? -1 : a; };
+    const byAge = (a, b) => age(b) - age(a) || String(a.full_name).localeCompare(String(b.full_name), 'ar');
+    const ids = new Set(list.map(v => v.id)); const under = v => v.category === 'family_member' && v.head_id && ids.has(v.head_id);
+    const heads = list.filter(v => v.category === 'family_head').sort(byAge);
+    const single = list.filter(v => v.category !== 'family_head' && !under(v)).sort(byAge);
+    return [...single.map(v => ({ v, member: false })), ...heads.flatMap(h => [{ v: h, member: false, head: true }, ...list.filter(m => under(m) && m.head_id === h.id).sort(byAge).map(v => ({ v, member: true }))])];
+  }
   const kidOf = bd => v => { const a = ageYears(bd[v.id]); return a !== null && a < 15; };
   const cnt = (list, kid) => { const c = list.filter(kid).length; return { n: list.length, a: list.length - c, c }; };
   const cntTxt = x => `${x.n} (${x.a} بالغين - ${x.c} أطفال)`;
@@ -154,10 +163,7 @@ const Compute = (() => {
       const cid = q.country_id ? +q.country_id : 0; const flights = fr.flights.filter(f => (!cid || f.country_id === cid) && f.group_no);
       const gm = new Map(); for (const f of flights) { const k = f.group_no.toLowerCase(); const g = gm.get(k) || { group_no: f.group_no, country: f.country_name || '', arrival: null, departure: null }; g[f.kind] = f; if (!g.country) g.country = f.country_name || ''; gm.set(k, g); }
       const label = v => v.category === 'family_member' && v.head_name ? `عائلة ${v.head_name}` : v.category === 'group_member' && v.group_name ? `فوج ${v.group_name}` : '';
-      const order = list => { const out = [], seen = new Set(); const key = v => v.category === 'family_member' ? 'h' + v.head_id : v.category === 'family_head' ? 'h' + v.id : v.category === 'group_member' ? 'g' + v.group_id : 'i' + v.id;
-        const byKey = {}; for (const v of list) (byKey[key(v)] ||= []).push(v);
-        for (const v of list) { const k = key(v); if (seen.has(k)) continue; seen.add(k); out.push(...byKey[k].sort((a, b) => (b.category === 'family_head') - (a.category === 'family_head') || (b.is_leader ? 1 : 0) - (a.is_leader ? 1 : 0))); } return out; };
-      const mk = (g, list) => { const people = order(list).map(v => ({ name: v.full_name, rel: label(v), child: isChild(v) })); const kids = people.filter(x => x.child).length; return { ...g, people, total: people.length, adults: people.length - kids, children: kids }; };
+      const mk = (g, list) => { const people = orderPeople(list, v => bd[v.id]).map(({ v }) => ({ name: v.full_name, rel: label(v), child: isChild(v) })); const kids = people.filter(x => x.child).length; return { ...g, people, total: people.length, adults: people.length - kids, children: kids }; };
       const groups = [...gm.values()].sort((a, b) => a.group_no.localeCompare(b.group_no, 'ar', { numeric: true })).map(g => {
         const ids = [g.arrival && g.arrival.id, g.departure && g.departure.id].filter(Boolean);
         return mk(g, vs.filter(v => ids.includes(v.arrival_flight_id) || ids.includes(v.departure_flight_id))); });
@@ -257,7 +263,7 @@ const Compute = (() => {
     return { def, ev, cols, rows, subtitle, groups, meta };
   }
   const reportList = u => Object.entries(REPORTS).filter(([, d]) => d.roles.includes(u.role)).map(([k, d]) => ({ key: k, title: d.title }));
-  const api = { ROLE_LABELS, CAT_LABELS, dashboard, mealsData, stripPeople, transportDaily, transportSummary, report, reportList, isDate, today };
+  const api = { orderPeople, ageYears, ROLE_LABELS, CAT_LABELS, dashboard, mealsData, stripPeople, transportDaily, transportSummary, report, reportList, isDate, today };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else window.Compute = api;
   return api;
 })();
