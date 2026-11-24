@@ -18,6 +18,7 @@ App.view('dashboard', async (page, ctx) => {
       h += `<div class="grid stats">${statCard(v.total, cs ? 'إجمالي زائري دولتك' : 'إجمالي الزائرين')}${statCard(v.individuals, 'أفراد')}${statCard(v.families, 'عائلات')}${statCard(v.group_members, 'أفراد الأفواج')}
         ${cs ? '' : statCard(v.countries, 'الدول المشاركة')}${statCard(v.present, 'الموجودون حالياً', 'ok')}${statCard(v.arriving, 'القادمون اليوم')}${statCard(v.departing, 'المغادرون اليوم')}</div>`;
     }
+    if (v.declared_unregistered) h += `<div class="muted small" style="margin-top:6px">الإجمالي يشمل ${v.declared_unregistered} فرداً من أعداد الأفواج المعلنة لم تُسجَّل أسماؤهم بعد.</div>`;
     h += '<div class="grid stats" style="margin-top:14px">';
     if (r) h += statCard(r.rooms_booked, 'الغرف المحجوزة') + statCard(r.rooms_available, 'الغرف المتاحة', 'ok') + statCard(r.occupancy_pct + '%', 'نسبة إشغال المباني', r.occupancy_pct > 90 ? 'bad' : r.occupancy_pct > 70 ? 'warn' : '');
     if (t) h += statCard(t.cars_required ?? '—', 'السيارات المطلوبة اليوم') + statCard(t.free_drivers, 'السائقون المتاحون', 'ok') + statCard(t.unassigned, 'زائرون بلا سيارة', t.unassigned ? 'bad' : 'ok');

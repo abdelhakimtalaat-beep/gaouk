@@ -70,9 +70,14 @@ const Compute = (() => {
     const date = isDate(q.date) ? q.date : today();
     const vs = u.role === 'building_supervisor' ? [] : await loadVisitors(rpc, { event_id: ev.id });
     const countAt = f => vs.filter(f).length; const out = { event: ev, date, role: u.role };
-    const countries = {}; vs.forEach(v => { countries[v.country_name] = (countries[v.country_name] || 0) + 1; });
-    out.visitors = { total: vs.length, individuals: countAt(v => v.category === 'individual'), families: countAt(v => v.category === 'family_head'), family_members: countAt(v => v.category === 'family_member'),
-      group_members: countAt(v => v.category === 'group_member'), countries: Object.keys(countries).length,
+    // أعداد الأفواج المعلنة: يُضاف لكل فوج ما لم يُسجَّل بالاسم من أعداده المعلنة (دون تكرار المسجلين)
+    const grs = u.role === 'building_supervisor' ? [] : (await rpc('GET', '/groups', { event_id: ev.id }).catch(() => ({ groups: [] }))).groups || [];
+    const regBy = {}; vs.forEach(v => { if (v.group_id) regBy[v.group_id] = (regBy[v.group_id] || 0) + 1; });
+    const extra = grs.map(g => ({ cn: g.country_name, n: Math.max(0, (g.members_count || 0) - (regBy[g.id] || 0)) })).filter(x => x.n);
+    const extraN = extra.reduce((a, x) => a + x.n, 0);
+    const countries = {}; vs.forEach(v => { countries[v.country_name] = (countries[v.country_name] || 0) + 1; }); extra.forEach(x => { countries[x.cn] = (countries[x.cn] || 0) + x.n; });
+    out.visitors = { total: vs.length + extraN, declared_unregistered: extraN, individuals: countAt(v => v.category === 'individual'), families: countAt(v => v.category === 'family_head'), family_members: countAt(v => v.category === 'family_member'),
+      group_members: countAt(v => v.category === 'group_member') + extraN, countries: Object.keys(countries).length,
       present: countAt(v => v.arrival_date && v.arrival_date <= date && (!v.departure_date || v.departure_date >= date)), arriving: countAt(v => v.arrival_date === date), departing: countAt(v => v.departure_date === date),
       unhoused: countAt(v => !v.bookings.length), incomplete: countAt(v => !v.arrival_date || !v.departure_date) };
     out.by_country = Object.entries(countries).map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n);
