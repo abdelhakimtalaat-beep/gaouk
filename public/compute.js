@@ -204,6 +204,10 @@ const Compute = (() => {
         if (inRange(v.arrival_date, R)) rows.push({ date: v.arrival_date, type: 'وصول', time: v.arrival_time, name: v.full_name, country: v.country_name, flight: [v.airline, v.flight_no].filter(Boolean).join(' '), airport: v.airport, driver: v.transports.filter(t => t.kind === 'pickup').map(t => t.driver_name).join('، ') });
         if (inRange(v.departure_date, R)) rows.push({ date: v.departure_date, type: 'مغادرة', time: v.departure_time, name: v.full_name, country: v.country_name, flight: [v.dep_airline, v.dep_flight_no].filter(Boolean).join(' '), airport: v.dep_airport || '', driver: v.transports.filter(t => t.kind === 'dropoff').map(t => t.driver_name).join('، ') });
       }
+      const bdm = await bdMap(rpc, q);
+      for (const x of await groupExtras(rpc, q, vs, kidOf(bdm))) { const nm = `فوج: ${x.g.name} — ${x.n} فرد (${x.a} بالغين - ${x.c} أطفال)${x.g.leader_name ? ' — المسئول: ' + x.g.leader_name : ''}`;
+        if (inRange(x.g.arrival_date, R)) rows.push({ date: x.g.arrival_date, type: 'وصول', time: x.g.arrival_time || '', name: nm, country: x.g.country_name, flight: '', airport: '', driver: '' });
+        if (inRange(x.g.departure_date, R)) rows.push({ date: x.g.departure_date, type: 'مغادرة', time: x.g.departure_time || '', name: nm, country: x.g.country_name, flight: '', airport: '', driver: '' }); }
       rows.sort((a, b) => a.date.localeCompare(b.date) || a.type.localeCompare(b.type) || a.time.localeCompare(b.time));
       return { cols: [C('date', 'التاريخ', 12), C('type', 'النوع', 9), C('time', 'الوقت', 8), C('name', 'الاسم', 26), C('country', 'الدولة', 14), C('flight', 'الرحلة', 18), C('airport', 'المطار', 16), C('driver', 'السائق', 18)], rows, subtitle: rangeText(R) };
     } },
