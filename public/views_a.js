@@ -200,7 +200,7 @@ function visitorForm(v, groups, done, pre) {
     <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" name="needs_transport" ${v ? (v.needs_transport ? 'checked' : '') : 'checked'}> يحتاج سيارة استقبال/توصيل</label></div>
     <div class="field full"><div id="ftext" class="alert info" style="margin:0">اختر رقم المجموعة لتظهر بيانات رحلتي الوصول والمغادرة. تُعدَّل بيانات الرحلات من تبويب «الرحلات».</div></div></div></div>`}
     <div class="fgrid"><div class="field full"><label>ملاحظات خاصة</label><textarea name="notes" style="min-height:56px">${esc(v?.notes)}</textarea></div></div>
-    <div id="fambox" ${cat === 'family_head' ? '' : 'hidden'}><h3>أفراد الأسرة <span class="badge">العدد الكلي: <span id="famcount">${1 + members.length}</span></span></h3><div class="members-edit" id="mrows"></div><button type="button" class="btn sec sm" id="addm">+ إضافة فرد</button></div></form>`;
+    <div id="fambox" ${cat === 'family_head' ? '' : 'hidden'}><h3>أفراد الأسرة <span class="badge">العدد الكلي: <span id="famcount">${1 + members.length}</span></span></h3><div id="dbfam" class="card" hidden style="padding:8px 12px;margin:6px 0;background:#f6f9f3"></div><div class="members-edit" id="mrows"></div><button type="button" class="btn sec sm" id="addm">+ إضافة فرد</button></div></form>`;
   const mrow = m => `<div class="mrow" data-id="${m?.id || ''}"><input placeholder="الاسم الكامل" data-k="full_name" value="${esc(m?.full_name)}"><input placeholder="صلة القرابة" data-k="relation" value="${esc(m?.relation)}"><button type="button" class="btn sm danger" data-rm>×</button></div>`;
   const m = modal({ title: isNew ? 'زائر جديد' : 'تعديل: ' + v.full_name, width: 860, body, buttons: [{ label: isNew ? 'حفظ' : 'حفظ التعديلات', onClick: async mm => save(mm, false) }, { label: 'إلغاء', cls: 'sec', close: true }] });
   const F = $('#vf', m.el);
@@ -210,19 +210,42 @@ function visitorForm(v, groups, done, pre) {
   members.forEach(x => $('#mrows', m.el).insertAdjacentHTML('beforeend', mrow(x)));
   if (cat === 'family_head' && !members.length && isNew === false) {}
   $('#addm', m.el).onclick = () => { $('#mrows', m.el).insertAdjacentHTML('beforeend', mrow()); sync(); $$('.mrow input', m.el).pop().focus(); };
-  m.el.onclick = e => { const r = e.target.closest('[data-rm]'); if (r) { r.closest('.mrow').remove(); sync(); } };
+  m.el.onclick = e => { const r = e.target.closest('[data-rm]'); if (r) { const row = r.closest('.mrow'); const pid = row.dataset.pid; row.remove(); if (pid) { const cb = $(`#dbfam input[data-pm="${pid}"]`, m.el); if (cb) cb.checked = false; } sync(); } };
+  // أفراد أسرة رب الأسرة من قاعدة البيانات: يظهرون تلقائياً ويمكن اختيار بعضهم
+  const nz = x => String(x || '').replace(/\s+/g, ' ').trim();
+  let dbHeadId = null;
+  const loadDbFamily = async () => {
+    const box = $('#dbfam', m.el); const clear = () => { box.hidden = true; box.innerHTML = ''; $$('.mrow[data-pid]', m.el).forEach(r => r.remove()); dbHeadId = null; sync(); };
+    if (isMember || !F.category || F.category.value !== 'family_head') return clear();
+    const cid = F.country_id && !F.country_id.disabled ? F.country_id.value : (v?.country_id || ''), name = nz(F.full_name.value); if (!cid || !name) return clear();
+    try {
+      const heads = (await api('GET', '/persons?' + qs({ country_id: cid, category: 'family_head' }))).persons; const h = heads.find(x => nz(x.full_name) === name); if (!h || !h.members_n) return clear();
+      if (dbHeadId === h.id) return; if (nz(F.full_name.value) !== name) return;
+      $$('.mrow[data-pid]', m.el).forEach(r => r.remove()); dbHeadId = h.id;
+      const have = new Set($$('.mrow input[data-k=full_name]', m.el).map(i => nz(i.value)));
+      const ms = (await api('GET', '/persons?' + qs({ country_id: cid, category: 'family_member' }))).persons.filter(x => x.head_id === h.id && !have.has(nz(x.full_name)));
+      if (!ms.length) { box.hidden = true; box.innerHTML = ''; return; }
+      box.hidden = false; box.innerHTML = `<b class="small">أفراد أسرة «${esc(h.full_name)}» في قاعدة البيانات — اختر من يزور معه:</b> <label style="margin-inline:10px;cursor:pointer"><input type="checkbox" id="dball"> الكل</label><div id="dblist">${ms.map(x => `<label style="display:block;cursor:pointer"><input type="checkbox" data-pm="${x.id}" data-nm="${esc(x.full_name)}"> ${esc(x.full_name)} ${ageBadge(x.birth_date)}</label>`).join('')}</div>`;
+      const setOne = (cb, on) => { cb.checked = on; const pid = cb.dataset.pm; const ex = $(`.mrow[data-pid="${pid}"]`, m.el);
+        if (on && !ex) { $('#mrows', m.el).insertAdjacentHTML('beforeend', mrow({ full_name: cb.dataset.nm })); $$('.mrow', m.el).pop().dataset.pid = pid; } else if (!on && ex) ex.remove(); };
+      box.onchange = e => { if (e.target.id === 'dball') $$('#dblist input', box).forEach(cb => setOne(cb, e.target.checked)); else if (e.target.dataset.pm) setOne(e.target, e.target.checked); $('#dball', box).checked = $$('#dblist input', box).every(cb => cb.checked); sync(); };
+      if (isNew) { $('#dball', box).checked = true; $$('#dblist input', box).forEach(cb => setOne(cb, true)); } sync();
+    } catch (_) {}
+  };
+  const ldf = debounce(loadDbFamily, 350);
   const showHead = () => { const h = headRef.cur; $('#headname', m.el).textContent = h ? `${h.full_name} (${h.country_name})` : 'لم يُحدَّد بعد'; };
   const headRef = { cur: pre.head || null };
   async function chooseHead() {
     const h = await pickHead(); if (!h) return false;
     headRef.cur = h; headId = h.id; headCountry = h.country_id; showHead(); check(); return true;
   }
+  F.full_name.addEventListener('input', ldf); if (F.country_id) F.country_id.addEventListener('change', ldf);
   if (F.category) F.category.onchange = async () => {
     if (F.category.value === 'family_member') { if (!headId && !(await chooseHead())) { F.category.value = prevCat === 'family_member' ? 'individual' : prevCat; } }
-    prevCat = F.category.value; sync();
+    prevCat = F.category.value; sync(); ldf();
   };
   if ($('#pickhead', m.el)) $('#pickhead', m.el).onclick = chooseHead;
-  sync(); if (pre.head) showHead();
+  sync(); if (pre.head) showHead(); ldf();
   let flights = [];
   const fdesc = (f, k) => f ? `<div><b>${k}:</b> ${esc([f.airline, f.flight_no].filter(Boolean).join(' '))}${f.airport ? ' — ' + esc(f.airport) : ''}${f.flight_date ? ' — ' + esc(f.flight_date) : ''}${f.flight_time ? ' ' + esc(f.flight_time) : ''}</div>` : `<div class="muted">لا توجد رحلة ${k}</div>`;
   const showGroup = () => { if (!$('#fgroup', m.el)) return; const g = $('#fgroup', m.el).value; if (!g) { $('#ftext', m.el).innerHTML = v && (v.arrival_date || v.departure_date) ? `<b>بيانات الرحلة الحالية:</b> وصول ${esc(v.arrival_date || '—')} ${esc(v.arrival_time || '')} ${esc([v.airline, v.flight_no].filter(Boolean).join(' '))} — مغادرة ${esc(v.departure_date || '—')} ${esc(v.departure_time || '')} ${esc([v.dep_airline, v.dep_flight_no].filter(Boolean).join(' '))}` : 'اختر رقم المجموعة لتظهر بيانات رحلتي الوصول والمغادرة. تُعدَّل بيانات الرحلات من تبويب «الرحلات».'; return; }
