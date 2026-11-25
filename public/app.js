@@ -80,6 +80,11 @@ const roomLabel = b => `${b.building_name} / ${b.floor_name} / ${b.room_number}`
 const can = (...roles) => App.user && roles.includes(App.user.role);
 const isMgr = () => can('admin', 'event_manager');
 const curEvent = () => App.events.find(e => e.id === App.eventId) || null;
+// ترتيب الأسر: رب الأسرة ثم تابعوه تحته مباشرة (لقوائم الأشخاص: قاعدة البيانات وقوائم الاختيار)
+function famSort(list) {
+  const ids = new Set(list.map(x => x.id)); const by = new Map(); list.forEach(x => { if (x.head_id && ids.has(x.head_id)) (by.get(x.head_id) || by.set(x.head_id, []).get(x.head_id)).push(x); });
+  const out = []; list.forEach(x => { if (x.head_id && ids.has(x.head_id)) return; out.push(x); (by.get(x.id) || []).forEach(m => out.push(m)); }); return out;
+}
 function debounce(fn, ms = 300) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 function printNow(target) {
   $$('.print-target').forEach(x => x.classList.remove('print-target'));
