@@ -123,9 +123,10 @@ App.view('visitors', async (page, ctx) => {
     if (a.dataset.view) return visitorDetail(+a.dataset.view, writer, load);
     const v = App._vlist.find(x => x.id === +(a.dataset.edit || a.dataset.del));
     if (a.dataset.edit) { const full = (await api('GET', '/visitors/' + v.id)).visitor; return visitorForm(full, groups, load); }
-    if (await confirmBox(`حذف «${v.full_name}»؟${v.members_count ? `\nسيُحذف معه ${v.members_count} من التابعين` : ''}${v.bookings.length ? '\nوستُلغى حجوزات الغرف الخاصة به' : ''}`, { danger: true, okText: 'حذف' })) {
-      await api('DELETE', '/visitors/' + v.id); toast('تم الحذف'); load();
-    }
+    const note = v.bookings.length ? '<br>وستُلغى حجوزات الغرف الخاصة به.' : '', run = async keep => { await api('DELETE', '/visitors/' + v.id + (keep ? '?keep_members=1' : '')); toast('تم الحذف'); load(); };
+    if (v.members_count) { modal({ title: 'حذف رب الأسرة', width: 540, body: `<p style="margin:0">«${esc(v.full_name)}» رب أسرة وله ${v.members_count} من التابعين.${note}<br>اختر ما يحدث للتابعين:</p>`,
+        buttons: [{ label: 'حذف رب الأسرة فقط (يبقى التابعون كأفراد)', onClick: async x => { x.close(); await run(true); } }, { label: 'حذف الأسرة كلها', cls: 'danger', onClick: async x => { x.close(); await run(false); } }, { label: 'رجوع', cls: 'sec', close: true }] }); return; }
+    if (await confirmBox(`حذف «${v.full_name}»؟${v.bookings.length ? '\nوستُلغى حجوزات الغرف الخاصة به' : ''}`, { danger: true, okText: 'حذف' })) await run(false);
   };
   if (writer) {
     $('#addv').onclick = () => visitorForm(null, groups, load);
