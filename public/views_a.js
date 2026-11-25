@@ -224,13 +224,14 @@ function visitorForm(v, groups, done, pre) {
       if (dbHeadId === h.id) return; if (nz(F.full_name.value) !== name) return;
       $$('.mrow[data-pid]', m.el).forEach(r => r.remove()); dbHeadId = h.id;
       const have = new Set($$('.mrow input[data-k=full_name]', m.el).map(i => nz(i.value)));
-      const ms = (await api('GET', '/persons?' + qs({ country_id: cid, category: 'family_member' }))).persons.filter(x => x.head_id === h.id && !have.has(nz(x.full_name)));
-      if (!ms.length) { box.hidden = true; box.innerHTML = ''; return; }
-      box.hidden = false; box.innerHTML = `<b class="small">أفراد أسرة «${esc(h.full_name)}» في قاعدة البيانات — اختر من يزور معه:</b> <label style="margin-inline:10px;cursor:pointer"><input type="checkbox" id="dball"> الكل</label><div id="dblist">${ms.map(x => `<label style="display:block;cursor:pointer"><input type="checkbox" data-pm="${x.id}" data-nm="${esc(x.full_name)}"> ${esc(x.full_name)} ${ageBadge(x.birth_date)}</label>`).join('')}</div>`;
+      const all = (await api('GET', '/persons?' + qs({ event_id: App.eventId, country_id: cid, category: 'family_member' }))).persons.filter(x => x.head_id === h.id);
+      const done = x => !!x.visitor_id || have.has(nz(x.full_name)); const ms = all.filter(x => !done(x)), reg = all.filter(done);
+      if (!all.length) { box.hidden = true; box.innerHTML = ''; return; }
+      box.hidden = false; box.innerHTML = `<b class="small">أفراد أسرة «${esc(h.full_name)}» في قاعدة البيانات — ${ms.length ? 'اختر من يزور معه:' : 'جميع أفراد أسرته مسجلون بالفعل في هذه الزيارة'}</b> ${ms.length ? '<label style="margin-inline:10px;cursor:pointer"><input type="checkbox" id="dball"> الكل</label>' : ''}<div id="dblist">${ms.map(x => `<label style="display:block;cursor:pointer"><input type="checkbox" data-pm="${x.id}" data-nm="${esc(x.full_name)}"> ${esc(x.full_name)} ${ageBadge(x.birth_date)}</label>`).join('')}</div>${reg.map(x => `<div class="muted" data-reg="${x.id}" style="color:#8a8f87"><input type="checkbox" checked disabled> ${esc(x.full_name)} ${ageBadge(x.birth_date)} <span class="small">— ✔ مسجَّل بالفعل في هذه الزيارة</span></div>`).join('')}`;
       const setOne = (cb, on) => { cb.checked = on; const pid = cb.dataset.pm; const ex = $(`.mrow[data-pid="${pid}"]`, m.el);
         if (on && !ex) { $('#mrows', m.el).insertAdjacentHTML('beforeend', mrow({ full_name: cb.dataset.nm })); $$('.mrow', m.el).pop().dataset.pid = pid; } else if (!on && ex) ex.remove(); };
-      box.onchange = e => { if (e.target.id === 'dball') $$('#dblist input', box).forEach(cb => setOne(cb, e.target.checked)); else if (e.target.dataset.pm) setOne(e.target, e.target.checked); $('#dball', box).checked = $$('#dblist input', box).every(cb => cb.checked); sync(); };
-      if (isNew) { $('#dball', box).checked = true; $$('#dblist input', box).forEach(cb => setOne(cb, true)); } sync();
+      box.onchange = e => { if (e.target.id === 'dball') $$('#dblist input', box).forEach(cb => setOne(cb, e.target.checked)); else if (e.target.dataset.pm) setOne(e.target, e.target.checked); if ($('#dball', box)) $('#dball', box).checked = $$('#dblist input', box).every(cb => cb.checked); sync(); };
+      if (isNew && ms.length) { $('#dball', box).checked = true; $$('#dblist input', box).forEach(cb => setOne(cb, true)); } sync();
     } catch (_) {}
   };
   const ldf = debounce(loadDbFamily, 350);
