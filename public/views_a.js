@@ -175,7 +175,13 @@ function groupForm(g, done) {
     <div class="field full"><label>ملاحظات</label><textarea name="notes">${esc(g?.notes)}</textarea></div></div></form>`;
   const gm = modal({ title: g ? 'تعديل فوج' : 'فوج جديد', width: 620, body, buttons: [{ label: 'حفظ', onClick: async m => {
     const f = $('#gf', m.el); if (!f.reportValidity()) return; const b = formData(f);
-    const r = g ? await api('PUT', '/groups/' + g.id, b) : await api('POST', '/groups', { ...b, event_id: App.eventId }); m.close(); toast('تم الحفظ'); done(r.id);
+    const r = g ? await api('PUT', '/groups/' + g.id, b) : await api('POST', '/groups', { ...b, event_id: App.eventId }); m.close();
+    const keys = ['group_no', 'arrival_airline', 'arrival_airport', 'arrival_flight_no', 'departure_airline', 'departure_airport', 'departure_flight_no'].filter(k => b[k]);
+    let lost = [];
+    if (keys.length) { try { const gs = (await api('GET', '/groups?event_id=' + App.eventId)).groups || []; const sv = gs.find(x => x.id === (r.id || (g && g.id))); lost = sv ? keys.filter(k => (sv[k] || '') !== String(b[k]).trim()) : []; } catch (e) { /* تجاهل */ } }
+    if (lost.length) { const LB = { group_no: 'رقم المجموعة', arrival_airline: 'شركة طيران الوصول', arrival_airport: 'مطار الوصول', arrival_flight_no: 'رقم رحلة الوصول', departure_airline: 'شركة طيران المغادرة', departure_airport: 'مطار المغادرة', departure_flight_no: 'رقم رحلة المغادرة' }; modal({ title: 'تنبيه: لم تُحفظ بعض البيانات', width: 520, body: `<p>تم حفظ الفوج، لكن قاعدة البيانات لم تحفظ هذه الخانات: <b>${lost.map(k => LB[k]).join('، ')}</b>.</p><p class="muted">السبب أن ملفات التحديث (الهجرات 0021 و0022 و0027) لم تُشغَّل بعد في Supabase. شغّلها من SQL Editor بالترتيب ثم أعد إدخال البيانات.</p>`, buttons: [{ label: 'حسناً', close: true }] }); }
+    else toast('تم الحفظ');
+    done(r.id);
   } }, { label: 'إلغاء', cls: 'sec', close: true }] });
   const tot = () => { const f = $('#gf', gm.el); $('#gtot', gm.el).textContent = ['men_count', 'women_count', 'children_count'].reduce((a, k) => a + (parseInt(f[k].value, 10) || 0), 0); };
   $$('#gf input[type=number]', gm.el).forEach(i => i.addEventListener('input', tot)); tot();
