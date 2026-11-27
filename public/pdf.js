@@ -57,22 +57,48 @@ const Pdf = (() => {
 
   /* تقرير المجموعات: وحدات HTML (رأس المجموعة ثم أزواج الأسماء بعمودين) تُستعمل في الشاشة وفي PDF */
   const ph = f => { const l = [f.phone1, f.phone2, f.phone3].filter(Boolean); return l.length ? `<div style="margin-top:2px;color:#14502a"><b>أرقام التواصل:</b> ${l.map(x => `<span dir="ltr" style="unicode-bidi:isolate;margin-inline-end:14px">${esc(x)}</span>`).join('')}</div>` : ''; };
-  const gHead = g => {
-    const info = (t, f) => f ? `<div style="margin-top:3px"><b>${t}:</b> ${esc([f.flight_date, f.airport && 'المطار: ' + f.airport, f.airline && 'شركة الطيران: ' + f.airline, f.flight_no && 'رقم الرحلة: ' + f.flight_no, f.flight_time && (t === 'رحلة الوصول' ? 'وقت الوصول: ' : 'وقت المغادرة: ') + f.flight_time].filter(Boolean).join('  |  '))}${ph(f)}</div>` : '';
-    return `<div style="margin-top:14px;padding:8px 10px;border:1px solid #1d5a34;border-radius:6px;background:#eef5ea;font-size:14px;font-weight:700"><div style="font-size:18px;font-weight:800;color:#14502a">${g.unlinked ? 'زوار غير مرتبطين برقم مجموعة' : `المجموعة رقم (${esc(g.group_no)})${g.country ? ' - ' + esc(g.country) : ''}`}</div>${info('رحلة الوصول', g.arrival)}${info('رحلة المغادرة', g.departure)}<div style="margin-top:4px;font-weight:700">المجموع: ${g.total} (${g.adults} بالغين - ${g.children} أطفال)</div></div>`;
+  const gHead = (g, cont) => {
+    const sp = (a) => a.filter(Boolean).map(x => `<span style="margin-inline-end:16px">${x}</span>`).join('');
+    const info = (t, f) => { if (!f) return ''; const tl = t === 'رحلة الوصول' ? 'وقت الوصول' : 'وقت المغادرة';
+      const l1 = sp([f.flight_date && `<b>${t}:</b> ${esc(f.flight_date)}`, f.flight_time && `${tl}: ${esc(f.flight_time)}`, f.airport && `المطار: ${esc(f.airport)}`]) || `<b>${t}</b>`;
+      const l2 = sp([f.airline && `شركة الطيران: ${esc(f.airline)}`, f.flight_no && `رقم الرحلة: <b dir="ltr" style="unicode-bidi:isolate">${esc(f.flight_no)}</b>`]);
+      return `<div style="margin-top:3px">${l1}</div>${l2 ? `<div style="margin-top:2px">${l2}</div>` : ''}`; };
+    const phones = [...new Set([g.arrival, g.departure].filter(Boolean).flatMap(f => [f.phone1, f.phone2, f.phone3]).filter(Boolean))];
+    const l3 = `<span style="margin-inline-end:20px">المجموع: ${g.total} (${g.adults} بالغين - ${g.children} أطفال)</span>${phones.length ? `<span style="color:#14502a"><b>أرقام التواصل:</b> ${phones.map(x => `<span dir="ltr" style="unicode-bidi:isolate;margin-inline-end:14px">${esc(x)}</span>`).join('')}</span>` : ''}`;
+    const title = g.unlinked ? 'زوار غير مرتبطين برقم مجموعة' : `المجموعة رقم (${esc(g.group_no)})${g.country ? ' - ' + esc(g.country) : ''}`;
+    if (cont) return `<div style="margin-top:10px;padding:4px 10px;border:1px dashed #1d5a34;border-radius:6px;background:#f6faf3;font-size:13px;font-weight:800;color:#14502a">${title} — تابع</div>`;
+    return `<div style="margin-top:14px;padding:8px 10px;border:1px solid #1d5a34;border-radius:6px;background:#eef5ea;font-size:14px;font-weight:700"><div style="font-size:18px;font-weight:800;color:#14502a">${title}</div>${info('رحلة الوصول', g.arrival)}${info('رحلة المغادرة', g.departure)}<div style="margin-top:4px">${l3}</div></div>`;
   };
   const gCell = (n, p) => p ? `<td style="width:50%;padding:4px 8px;border-bottom:1px solid #e3e8df;vertical-align:middle;text-align:right;font-weight:700;font-size:15px"><span style="display:inline-block;width:34px;color:#777;text-align:right">${n}.</span><span style="white-space:nowrap">${esc(p.name)}</span>${p.child ? ' <span style="color:#a65b00;font-size:11px">(طفل)</span>' : ''}${p.rel ? ` <span style="color:#555;font-size:11.5px">(${esc(p.rel)})</span>` : ''}</td>` : '<td style="width:50%"></td>';
-  const gRow = (g, i) => `<table style="border-collapse:collapse;width:100%;table-layout:fixed"><tr>${gCell(2 * i + 1, g.people[2 * i])}${gCell(2 * i + 2, g.people[2 * i + 1])}</tr></table>`;
+  /* الأسماء رأسياً: العمود الأيمن أولاً (1..r) ثم الأيسر (r+1..2r). s = بداية الشريحة، cnt = عدد أسمائها، r = عدد الصفوف */
+  const gBlock = (g, s, cnt, r) => { let h = ''; for (let i = 0; i < r; i++) { const a = s + i, b = s + r + i; h += `<tr>${gCell(a + 1, a < s + cnt ? g.people[a] : null)}${gCell(b + 1, b < s + cnt ? g.people[b] : null)}</tr>`; } return `<table style="border-collapse:collapse;width:100%;table-layout:fixed">${h}</table>`; };
   function groupUnits(d) {
-    const u = []; for (const g of d.groups) { u.push({ html: gHead(g), keep: 2 }); for (let i = 0; i < Math.ceil(g.people.length / 2); i++) u.push({ html: gRow(g, i) }); } return u;
+    const u = []; for (const g of d.groups) { u.push({ html: gHead(g) }); const n = g.people.length; if (n) u.push({ html: gBlock(g, 0, n, Math.ceil(n / 2)) }); } return u;
   }
   async function groupsReport(d, onProgress) {
-    const W = 794, H = 1123, S = 1.6; const units = groupUnits(d);
+    const W = 794, H = 1123, S = 1.6;
     const stage = document.createElement('div'); stage.style.cssText = `position:fixed;left:-30000px;top:0;width:${W - 2 * PAD}px;${FONT}`; stage.setAttribute('dir', 'rtl');
-    stage.innerHTML = `<div>${titleHtml(d, true)}</div>` + units.map(x => `<div>${x.html}</div>`).join(''); document.body.appendChild(stage);
-    let titleH, hs; try { const k = [...stage.children]; titleH = k[0].offsetHeight + 10; hs = k.slice(1).map(x => x.getBoundingClientRect().height); } finally { stage.remove(); }
+    const one = (g, i) => `<div><table style="border-collapse:collapse;width:100%;table-layout:fixed"><tr>${gCell(i + 1, g.people[i])}<td style="width:50%"></td></tr></table></div>`;
+    stage.innerHTML = `<div>${titleHtml(d, true)}</div>` + d.groups.map(g => `<div>${gHead(g)}</div><div>${gHead(g, true)}</div>${g.people.map((_, i) => one(g, i)).join('')}`).join(''); document.body.appendChild(stage);
+    let titleH; const G = [];
+    try { const k = [...stage.children]; titleH = k[0].offsetHeight + 10; let c = 1; for (const g of d.groups) { const hh = k[c].getBoundingClientRect().height, hc = k[c + 1].getBoundingClientRect().height; c += 2; const hp = g.people.map(() => k[c++].getBoundingClientRect().height); G.push({ g, hh, hc, hp }); } } finally { stage.remove(); }
     const avail = H - 2 * PAD - FOOT; const pages = []; let cur = [], used = titleH;
-    units.forEach((x, k) => { const need = hs[k] + (x.keep ? (hs[k + 1] || 0) + (hs[k + 2] || 0) : 0); if (cur.length && used + need > avail) { pages.push(cur); cur = []; used = 26; } cur.push(x); used += hs[k]; });
+    const newPage = () => { pages.push(cur); cur = []; used = 26; };
+    for (const { g, hh, hc, hp } of G) {
+      const n = hp.length; let s = 0, first = true;
+      if (!n) { if (cur.length && used + hh > avail) newPage(); cur.push({ html: gHead(g) }); used += hh; continue; }
+      while (s < n) {
+        const hd = first ? hh : hc; const rem = n - s;
+        const fit = (r) => { let t = 0; for (let i = 0; i < r; i++) t += Math.max(hp[s + i] || 0, hp[s + r + i] || 0); return t; };
+        let room = avail - used - hd, r = 0;
+        while (r < Math.ceil(rem / 2) && fit(r + 1) <= room) r++;
+        if (r < Math.min(2, Math.ceil(rem / 2)) && cur.length) { newPage(); continue; }   /* لا رأس وحده في آخر الصفحة */
+        if (r < 1) r = 1;
+        const cnt = Math.min(rem, 2 * r), rr = Math.ceil(cnt / 2);
+        cur.push({ html: gHead(g, !first) }); cur.push({ html: gBlock(g, s, cnt, rr) }); used += hd + fit(rr); s += cnt; first = false;
+        if (s < n) newPage();
+      }
+    }
     pages.push(cur); const out = [];
     for (let p = 0; p < pages.length; p++) {
       const body = titleHtml(d, p === 0) + pages[p].map(x => x.html).join('') + `<div style="position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:11px;color:#777">صفحة ${p + 1} من ${pages.length}</div>`;
