@@ -167,7 +167,7 @@ const Compute = (() => {
     } },
     families_groups: { roles: ['admin', 'event_manager', 'country_supervisor'], title: 'كشف العائلات والأفواج', async build(rpc, u, q) {
       const [vs, bd] = await Promise.all([rv(rpc, q), bdMap(rpc, q)]); const kid = kidOf(bd); const rows = [];
-      for (const h of vs.filter(v => v.category === 'family_head')) { const mem = vs.filter(v => v.head_id === h.id); const c = cnt([h, ...mem], kid);
+      for (const h of vs.filter(v => v.category === 'family_head')) { const mem = vs.filter(v => v.head_id === h.id); if (!mem.length) continue; /* رب أسرة يسافر منفرداً في هذه الزيارة: لا يُعدّ عائلة */ const c = cnt([h, ...mem], kid);
         rows.push({ type: 'عائلة', name: h.full_name, country: h.country_name, count: cntTxt(c), _n: c.n, ad: h.arrival_date, dd: h.departure_date, rooms: roomText([...h.bookings, ...mem.flatMap(m => m.bookings)].filter((b, i, a) => a.findIndex(x => x.room_id === b.room_id) === i)) }); }
       const groups = {}; for (const v of vs.filter(x => x.category === 'group_member')) (groups[v.group_id] ||= []).push(v);
       for (const list of Object.values(groups)) { const f = list[0]; const c = cnt(list, kid);
