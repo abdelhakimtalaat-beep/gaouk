@@ -130,7 +130,15 @@ const Compute = (() => {
   const kidOf = bd => v => { const a = ageYears(bd[v.id]); return a !== null && a < 15; };
   const cnt = (list, kid) => { const c = list.filter(kid).length; return { n: list.length, a: list.length - c, c }; };
   const cntTxt = x => `${x.n} (${x.a} بالغين - ${x.c} أطفال)`;
-  const rv = (rpc, q, country) => loadVisitors(rpc, { event_id: q.event_id, country_id: country || q.country_id });
+  // أعضاء الفوج بلا بيانات رحلة خاصة يرثون شركة الطيران والرحلة والمطار والوقت من بيانات فوجهم
+  const rv = async (rpc, q, country) => {
+    const vs = await loadVisitors(rpc, { event_id: q.event_id, country_id: country || q.country_id });
+    if (vs.some(v => v.group_id)) { const gm = new Map((((await rpc('GET', '/groups', { event_id: q.event_id }).catch(() => ({ groups: [] }))).groups) || []).map(g => [g.id, g]));
+      vs.forEach(v => { const g = v.group_id && gm.get(v.group_id); if (!g) return; const set = (k, val) => { if (!v[k] && val) v[k] = val; }; set('airline', g.arrival_airline); set('flight_no', g.arrival_flight_no); set('airport', g.arrival_airport); set('arrival_time', g.arrival_time); set('dep_airline', g.departure_airline); set('dep_flight_no', g.departure_flight_no); set('dep_airport', g.departure_airport); set('departure_time', g.departure_time); }); }
+    return vs;
+  };
+  const tmOk = (t, q) => { const f = /^\d{2}:\d{2}$/.test(q.time_from || '') ? q.time_from : '', e = /^\d{2}:\d{2}$/.test(q.time_to || '') ? q.time_to : ''; if (!f && !e) return true; t = String(t || ''); return !!t && (!f || t >= f) && (!e || t <= e); };
+  const tmText = q => { const f = /^\d{2}:\d{2}$/.test(q.time_from || '') ? q.time_from : '', e = /^\d{2}:\d{2}$/.test(q.time_to || '') ? q.time_to : ''; return f || e ? `وقت الرحلة: ${f || '00:00'} ← ${e || '23:59'}` : ''; };
   // الأعداد المعلنة في الأفواج التي لم تُسجَّل أسماؤها بعد: لكل فوج (ما أُعلن − المسجّل بالاسم) مع تقسيم بالغين/أطفال
   async function groupExtras(rpc, q, vs, kid) {
     const grs = ((await rpc('GET', '/groups', { event_id: q.event_id }).catch(() => ({ groups: [] }))).groups || []).filter(g => !q.country_id || g.country_id === +q.country_id);
@@ -203,35 +211,35 @@ const Compute = (() => {
     arrivals_departures: { roles: ['admin', 'event_manager', 'country_supervisor', 'transport'], title: 'كشف القادمين والمغادرين', async build(rpc, u, q) {
       const vs = await rv(rpc, q); const R = range(q); const rows = []; const ordv = new Map(vs.map((v, i) => [v.id, i]));
       for (const v of vs) {
-        if (inRange(v.arrival_date, R)) rows.push({ _o: ordv.get(v.id), _fam: famOf(v), date: v.arrival_date, type: 'وصول', time: v.arrival_time, name: v.full_name, country: v.country_name, flight: [v.airline, v.flight_no].filter(Boolean).join(' '), airport: v.airport, driver: v.transports.filter(t => t.kind === 'pickup').map(t => t.driver_name).join('، ') });
-        if (inRange(v.departure_date, R)) rows.push({ _o: ordv.get(v.id), _fam: famOf(v), date: v.departure_date, type: 'مغادرة', time: v.departure_time, name: v.full_name, country: v.country_name, flight: [v.dep_airline, v.dep_flight_no].filter(Boolean).join(' '), airport: v.dep_airport || '', driver: v.transports.filter(t => t.kind === 'dropoff').map(t => t.driver_name).join('، ') });
+        if (inRange(v.arrival_date, R) && tmOk(v.arrival_time, q)) rows.push({ _o: ordv.get(v.id), _fam: famOf(v), date: v.arrival_date, type: 'وصول', time: v.arrival_time, name: v.full_name, country: v.country_name, flight: [v.airline, v.flight_no].filter(Boolean).join(' '), airport: v.airport, driver: v.transports.filter(t => t.kind === 'pickup').map(t => t.driver_name).join('، ') });
+        if (inRange(v.departure_date, R) && tmOk(v.departure_time, q)) rows.push({ _o: ordv.get(v.id), _fam: famOf(v), date: v.departure_date, type: 'مغادرة', time: v.departure_time, name: v.full_name, country: v.country_name, flight: [v.dep_airline, v.dep_flight_no].filter(Boolean).join(' '), airport: v.dep_airport || '', driver: v.transports.filter(t => t.kind === 'dropoff').map(t => t.driver_name).join('، ') });
       }
       const bdm = await bdMap(rpc, q);
       for (const x of await groupExtras(rpc, q, vs, kidOf(bdm))) { const nm = `فوج: ${x.g.name} — ${x.n} فرد (${x.a} بالغين - ${x.c} أطفال)${x.g.leader_name ? ' — المسئول: ' + x.g.leader_name : ''}`;
-        if (inRange(x.g.arrival_date, R)) rows.push({ date: x.g.arrival_date, type: 'وصول', time: x.g.arrival_time || '', name: nm, country: x.g.country_name, flight: [x.g.arrival_airline, x.g.arrival_flight_no].filter(Boolean).join(' '), airport: x.g.arrival_airport || '', driver: '' });
-        if (inRange(x.g.departure_date, R)) rows.push({ date: x.g.departure_date, type: 'مغادرة', time: x.g.departure_time || '', name: nm, country: x.g.country_name, flight: [x.g.departure_airline, x.g.departure_flight_no].filter(Boolean).join(' '), airport: x.g.departure_airport || '', driver: '' }); }
+        if (inRange(x.g.arrival_date, R) && tmOk(x.g.arrival_time, q)) rows.push({ date: x.g.arrival_date, type: 'وصول', time: x.g.arrival_time || '', name: nm, country: x.g.country_name, flight: [x.g.arrival_airline, x.g.arrival_flight_no].filter(Boolean).join(' '), airport: x.g.arrival_airport || '', driver: '' });
+        if (inRange(x.g.departure_date, R) && tmOk(x.g.departure_time, q)) rows.push({ date: x.g.departure_date, type: 'مغادرة', time: x.g.departure_time || '', name: nm, country: x.g.country_name, flight: [x.g.departure_airline, x.g.departure_flight_no].filter(Boolean).join(' '), airport: x.g.departure_airport || '', driver: '' }); }
       rows.sort((a, b) => a.date.localeCompare(b.date) || a.type.localeCompare(b.type) || String(a.time).localeCompare(String(b.time)) || (a._o ?? 1e9) - (b._o ?? 1e9));
-      return { cols: [C('date', 'التاريخ', 12), C('type', 'النوع', 9), C('time', 'الوقت', 8), C('name', 'الاسم', 26), C('country', 'الدولة', 14), C('flight', 'الرحلة', 18), C('airport', 'المطار', 16), C('driver', 'السائق', 18)], rows, subtitle: rangeText(R) };
+      return { cols: [C('date', 'التاريخ', 12), C('type', 'النوع', 9), C('time', 'الوقت', 8), C('name', 'الاسم', 26), C('country', 'الدولة', 14), C('flight', 'الرحلة', 18), C('airport', 'المطار', 16), C('driver', 'السائق', 18)], rows, subtitle: [rangeText(R), tmText(q)].filter(Boolean).join(' — ') };
     } },
     arrivals_counts: { roles: ['admin', 'event_manager', 'country_supervisor', 'transport'], title: 'القادمون والمغادرون — أعداد حسب اليوم والرحلة', async build(rpc, u, q) {
       const [vs0, bd] = await Promise.all([rv(rpc, q), bdMap(rpc, q)]); const kid0 = kidOf(bd); const kid = v => v._kid !== undefined ? v._kid : kid0(v); const R = range(q); const m = new Map();
-      const vs = [...vs0]; for (const x of await groupExtras(rpc, q, vs0, kid0)) for (let i = 0; i < x.n; i++) vs.push({ id: 'g' + x.g.id + '_' + i, _kid: i >= x.a, country_name: x.g.country_name, arrival_date: x.g.arrival_date, departure_date: x.g.departure_date, airline: x.g.arrival_airline || '', flight_no: [x.g.arrival_flight_no, '(فوج ' + x.g.name + ')'].filter(Boolean).join(' '), airport: x.g.arrival_airport || '', dep_airline: x.g.departure_airline || '', dep_flight_no: [x.g.departure_flight_no, '(فوج ' + x.g.name + ')'].filter(Boolean).join(' '), dep_airport: x.g.departure_airport || '' });
+      const vs = [...vs0]; for (const x of await groupExtras(rpc, q, vs0, kid0)) for (let i = 0; i < x.n; i++) vs.push({ id: 'g' + x.g.id + '_' + i, _kid: i >= x.a, country_name: x.g.country_name, arrival_date: x.g.arrival_date, departure_date: x.g.departure_date, arrival_time: x.g.arrival_time || '', departure_time: x.g.departure_time || '', airline: x.g.arrival_airline || '', flight_no: [x.g.arrival_flight_no, '(فوج ' + x.g.name + ')'].filter(Boolean).join(' '), airport: x.g.arrival_airport || '', dep_airline: x.g.departure_airline || '', dep_flight_no: [x.g.departure_flight_no, '(فوج ' + x.g.name + ')'].filter(Boolean).join(' '), dep_airport: x.g.departure_airport || '' });
       const fmap = new Map(((await rpc('GET', '/flights', { event_id: q.event_id }).catch(() => ({ flights: [] }))).flights || []).map(f => [f.id, [f.phone1, f.phone2, f.phone3].filter(Boolean).join(' / ')]));
-      const add = (date, flight, airport, country, v, k) => { const key = [date, flight, airport, country].join('|'); const r = m.get(key) || { date, flight, airport, country, arr: [], dep: [], phones: '' }; r[k].push(v); if (!r.phones) r.phones = fmap.get(k === 'arr' ? v.arrival_flight_id : v.departure_flight_id) || ''; m.set(key, r); };
+      const add = (date, flight, airport, country, v, k) => { const time = (k === 'arr' ? v.arrival_time : v.departure_time) || ''; if (!tmOk(time, q)) return; const key = [date, flight, time, airport, country].join('|'); const r = m.get(key) || { date, flight, time, airport, country, arr: [], dep: [], phones: '' }; r[k].push(v); if (!r.phones) r.phones = fmap.get(k === 'arr' ? v.arrival_flight_id : v.departure_flight_id) || ''; m.set(key, r); };
       for (const v of vs) {
         if (inRange(v.arrival_date, R)) add(v.arrival_date, [v.airline, v.flight_no].filter(Boolean).join(' ') || 'بدون رحلة', v.airport || '', v.country_name, v, 'arr');
         if (inRange(v.departure_date, R)) add(v.departure_date, [v.dep_airline, v.dep_flight_no].filter(Boolean).join(' ') || '—', v.dep_airport || '', v.country_name, v, 'dep');
       }
       const days = [...new Set([...m.values()].map(r => r.date))].sort(); const rows = []; let A = [], D = [];
-      const line = (date, flight, airport, country, a, d, phones = '') => ({ date, flight, airport, country, phones, arr: cntTxt(cnt(a, kid)), dep: cntTxt(cnt(d, kid)), total: cntTxt(cnt([...a, ...d], kid)), _a: a.length, _d: d.length });
+      const line = (date, flight, airport, country, a, d, phones = '', time = '') => ({ date, flight, time, airport, country, phones, arr: cntTxt(cnt(a, kid)), dep: cntTxt(cnt(d, kid)), total: cntTxt(cnt([...a, ...d], kid)), _a: a.length, _d: d.length });
       for (const d of days) {
-        const list = [...m.values()].filter(r => r.date === d).sort((a, b) => (a.flight === '—') - (b.flight === '—') || a.flight.localeCompare(b.flight) || a.country.localeCompare(b.country, 'ar'));
+        const list = [...m.values()].filter(r => r.date === d).sort((a, b) => (a.flight === '—') - (b.flight === '—') || (a.time || '~').localeCompare(b.time || '~') || a.flight.localeCompare(b.flight) || a.country.localeCompare(b.country, 'ar'));
         const dayTxt = `${dayAr(d)} ${d}`; let sa = [], sd = [];
-        for (const r of list) { rows.push(line(dayTxt, r.flight, r.airport, r.country, r.arr, r.dep, r.phones)); sa = sa.concat(r.arr); sd = sd.concat(r.dep); }
+        for (const r of list) { rows.push(line(dayTxt, r.flight, r.airport, r.country, r.arr, r.dep, r.phones, r.time)); sa = sa.concat(r.arr); sd = sd.concat(r.dep); }
         rows.push(line(dayTxt, 'إجمالي اليوم', '', '', sa, sd)); A = A.concat(sa); D = D.concat(sd);
       }
       if (days.length) rows.push(line('الإجمالي', '', '', '', A, D));
-      return { cols: [C('date', 'اليوم', 22), C('country', 'الدولة', 14), C('flight', 'الرحلة', 22), C('airport', 'المطار', 16), C('phones', 'أرقام التواصل', 26), C('arr', 'عدد القادمين', 24), C('dep', 'عدد المغادرين', 24), C('total', 'المجموع', 24)], rows, subtitle: rangeText(R) };
+      return { cols: [C('date', 'اليوم', 22), C('country', 'الدولة', 14), C('flight', 'الرحلة', 22), C('time', 'وقت الرحلة', 10), C('airport', 'المطار', 16), C('phones', 'أرقام التواصل', 26), C('arr', 'عدد القادمين', 24), C('dep', 'عدد المغادرين', 24), C('total', 'المجموع', 24)], rows, subtitle: [rangeText(R), tmText(q)].filter(Boolean).join(' — ') };
     } },
     housing: { roles: HOUSERS, title: 'كشف تسكين المباني والأدوار', async build(rpc, u, q) {
       let bs = (await rpc('GET', '/bookings', { event_id: q.event_id })).bookings;
