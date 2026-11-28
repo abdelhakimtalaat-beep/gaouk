@@ -382,9 +382,9 @@ async function pickPerson() {
     $('#pl', m.el).ondblclick = e => { const r = e.target.closest('label')?.querySelector('input'); if (r) { done(list.find(p => p.id === +r.value)); m.close(); } };
   });
 }
-// العمر بالسنوات من تاريخ الميلاد (YYYY-MM-DD) حتى اليوم؛ بالغ = 15 فأكثر، طفل = أقل من 15
+// العمر بالسنوات من تاريخ الميلاد (YYYY-MM-DD) حتى اليوم؛ طفل = 7 سنوات فأقل، بالغ = 8 فأكثر أو بلا تاريخ ميلاد
 const ageOf = bd => { if (!bd || !/^\d{4}-\d\d-\d\d$/.test(bd)) return null; const b = new Date(bd + 'T00:00:00'), n = new Date(); let a = n.getFullYear() - b.getFullYear(); if (n.getMonth() < b.getMonth() || (n.getMonth() === b.getMonth() && n.getDate() < b.getDate())) a--; return a < 0 ? null : a; };
-const ageGroup = bd => { const a = ageOf(bd); return a === null ? '' : a >= 15 ? 'adult' : 'child'; };
+const ageGroup = bd => { const a = ageOf(bd); return a === null ? '' : a >= 8 ? 'adult' : 'child'; };
 const AGEL = { adult: 'بالغ', child: 'طفل' };
 const ageBadge = bd => { const g = ageGroup(bd); return g ? `<span class="badge ${g === 'adult' ? 'ok' : 'warn'}">${AGEL[g]} (${ageOf(bd)})</span>` : '<span class="muted small">—</span>'; };
 const PCAT = { family_head: 'رب أسرة', family_member: 'تابع لأسرة', individual: 'فرد', group_member: 'ضمن فوج', group_leader: 'مسئول فوج' };
@@ -394,7 +394,7 @@ App.view('persons', async page => {
   const S = App._pf ||= { q: '', country_id: '', category: '', age: '' };
   const personForm = (p, done) => {
     const body = `<form id="pf"><div class="fgrid"><div class="field full"><label>الاسم *</label><input name="full_name" required value="${esc(p?.full_name)}"></div>
-      <div class="field"><label>تاريخ الميلاد <span class="muted small">(بالغ: 15 سنة فأكثر، طفل: أقل من 15)</span></label><input type="date" name="birth_date" value="${esc(p?.birth_date)}"></div>
+      <div class="field"><label>تاريخ الميلاد <span class="muted small">(طفل: 7 سنوات فأقل، ومن لا تاريخ ميلاد له يُحسب بالغاً)</span></label><input type="date" name="birth_date" value="${esc(p?.birth_date)}"></div>
       <div class="field"><label>الدولة *</label><select name="country_id" required>${countryOpts(p?.country_id ?? (App.countries.length === 1 ? App.countries[0].id : ''), 'اختر…')}</select></div>
       <div class="field"><label>البلد</label><input name="city" value="${esc(p?.city)}"></div>
       <div class="field"><label>رقم الهاتف 1</label><input name="phone" dir="ltr" style="text-align:right" value="${esc(p?.phone)}"></div><div class="field"><label>رقم الهاتف 2</label><input name="phone2" dir="ltr" style="text-align:right" value="${esc(p?.phone2)}"></div>

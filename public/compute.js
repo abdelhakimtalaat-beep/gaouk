@@ -113,7 +113,7 @@ const Compute = (() => {
   const C = (key, label, width = 18) => ({ key, label, width });
   const dayAr = d => ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'][new Date(d + 'T00:00:00Z').getUTCDay()];
   const roomText = bs => bs.map(b => `${b.building_name} / ${b.floor_name} / ${b.room_number}`).join('، ');
-  // أعمار الزائرين: تُؤخذ من قاعدة البيانات (persons) بمطابقة الاسم والدولة؛ بالغ = 15 سنة فأكثر، طفل = أقل من 15، ومن لا تاريخ ميلاد له يُحسب بالغاً
+  // أعمار الزائرين: تُؤخذ من قاعدة البيانات (persons) بمطابقة الاسم والدولة؛ طفل = 7 سنوات فأقل، والباقي بالغون، ومن لا تاريخ ميلاد له يُحسب بالغاً
   const ageYears = d => { if (!d || !/^\d{4}-\d\d-\d\d$/.test(d)) return null; const b = new Date(d + 'T00:00:00'), n = new Date(); let a = n.getFullYear() - b.getFullYear(); if (n.getMonth() < b.getMonth() || (n.getMonth() === b.getMonth() && n.getDate() < b.getDate())) a--; return a < 0 ? null : a; };
   async function bdMap(rpc, q) { try { const m = {}; for (const p of (await rpc('GET', '/persons', { event_id: q.event_id, country_id: q.country_id || '' })).persons) if (p.visitor_id && p.birth_date) m[p.visitor_id] = p.birth_date; return m; } catch (_) { return {}; } }
   // ترتيب الأشخاص: الأفراد أولاً (الأكبر عمراً فالأصغر)، ثم أرباب الأسر (الأكبر عمراً)، وتحت كل رب أسرة تابعوه (الأكبر عمراً). من لا تاريخ ميلاد له يأتي آخراً
@@ -127,7 +127,7 @@ const Compute = (() => {
   }
   // مفتاح الأسرة: رب الأسرة وتابعوه (أو المرتبطون باسمه) تحت بعضهم
   const famOf = v => v.head_id || (v.kept_head ? 'k:' + v.kept_head + '|' + v.country_id : v.id);
-  const kidOf = bd => v => { const a = ageYears(bd[v.id]); return a !== null && a < 15; };
+  const kidOf = bd => v => { const a = ageYears(bd[v.id]); return a !== null && a <= 7; };
   const cnt = (list, kid) => { const c = list.filter(kid).length; return { n: list.length, a: list.length - c, c }; };
   const cntTxt = x => `${x.n} (${x.a} بالغين - ${x.c} أطفال)`;
   // أعضاء الفوج بلا بيانات رحلة خاصة يرثون شركة الطيران والرحلة والمطار والوقت من بيانات فوجهم
